@@ -1,0 +1,6 @@
+streamlit>=1.31.0
+pandas==1.5.3
+sqlalchemy==1.4.54
+numpy==1.26.4
+wheel==0.45.1
+pyarrow==21.0.0

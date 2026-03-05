@@ -1,0 +1,135 @@
+networks:
+  dashboard_shared:
+    external: true
+
+services:
+
+  menu-dashboard:
+    build:
+      context: ./menu_dashboard
+    container_name: menu-dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    networks:
+      - dashboard_shared
+    volumes:
+      - /home/pi53/dashboard/current:/app:ro
+      - /home/pi53/dashboard/current/data:/app/data:rw
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Taipei
+      - STREAMLIT_BROWSER_GATHERUSAGESTATS=false
+      - PYTHONPATH=/app
+    command:
+      - bash
+      - -lc
+      - streamlit run /app/dashboard/dashboard.py --server.address 0.0.0.0 --server.port 8501
+
+  menu-dashboard-staging:
+    build:
+      context: ./menu_dashboard
+    container_name: menu-dashboard-staging
+    restart: unless-stopped
+    ports:
+      - "8502:8502"
+    networks:
+      - dashboard_shared
+    volumes:
+      - /home/pi53/dashboard/staging_dir:/app:rw
+      - /home/pi53/dashboard/current/data:/app/data:rw
+      - /etc/localtime:/etc/localtime:ro
+      # Docker API（供 promote/rollback 重啟 PROD 容器）
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      # promote / rollback 腳本
+      - /home/pi53/dashboard/bin/promote_ui.py:/host/promote_ui.py:ro
+      - /home/pi53/dashboard/bin/rollback_ui.py:/host/rollback_ui.py:ro
+      # admin_panels 固定版本（防止 zip deploy 覆蓋）
+      - /home/pi53/dashboard/bin/admin_panels.py:/app/dashboard/admin_panels.py:ro
+      # Telegram 設定
+      - /home/pi53/dashboard/.telegram_env:/home/pi53/dashboard/.telegram_env:ro
+      # PROD 目錄（promote/rollback 需要讀寫）
+      - /home/pi53/dashboard/current:/home/pi53/dashboard/current:rw
+      # promote 前備份目錄
+      - /home/pi53/dashboard/_prod_backup:/home/pi53/dashboard/_prod_backup:rw
+      # promote log
+      - /home/pi53/dashboard/logs:/home/pi53/dashboard/logs:rw
+    environment:
+      - TZ=Asia/Taipei
+      - STREAMLIT_BROWSER_GATHERUSAGESTATS=false
+      - PYTHONPATH=/app
+      - APP_ENV=staging
+    command:
+      - bash
+      - -lc
+      - |
+        cd /app
+        exec streamlit run dashboard/dashboard.py --server.address=0.0.0.0 --server.port=8502
+
+  zip-deploy-watcher:
+    build:
+      context: ./zip_watcher
+    container_name: zip-deploy-watcher
+    restart: unless-stopped
+    networks:
+      - dashboard_shared
+    volumes:
+      - /home/pi53/dashboard/incoming:/watch:rw
+      - /home/pi53/dashboard/deploy_zip.sh:/host_dashboard/deploy_zip.sh:ro
+      - /home/pi53/dashboard/.telegram_env:/home/pi53/dashboard/.telegram_env:ro
+      - /home/pi53/dashboard/deploy_verify.sh:/host_dashboard/deploy_verify.sh:ro
+      - /home/pi53/dashboard/staging_dir:/home/pi53/dashboard/staging_dir:rw
+      - /home/pi53/dashboard/_work:/home/pi53/dashboard/_work:rw
+      - /home/pi53/raspi-system/zip_watcher/watch.sh:/app/watch.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/pi53/raspi-system/docker-compose.yml:/compose/docker-compose.yml:ro
+      - /etc/localtime:/etc/localtime:ro
+    working_dir: /compose
+    environment:
+      - TZ=Asia/Taipei
+      - WATCH_DIR=/watch
+      - DEPLOY_SCRIPT=/host_dashboard/deploy_zip.sh
+      - VERIFY_SCRIPT=/host_dashboard/deploy_verify.sh
+    command:
+      - bash
+      - -lc
+      - |
+        chmod +x /host_dashboard/deploy_zip.sh 2>/dev/null || true
+        chmod +x /host_dashboard/deploy_verify.sh 2>/dev/null || true
+        chmod +x /app/watch.sh 2>/dev/null || true
+        /app/watch.sh
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    networks:
+      - dashboard_shared
+    volumes:
+      - /etc/cloudflared:/etc/cloudflared:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Taipei
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+
+  luwei-accounting:
+    build:
+      context: /home/pi53/accounting
+    container_name: luwei-accounting
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    networks:
+      - dashboard_shared
+    volumes:
+      - /home/pi53/accounting/data:/app/data
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Taipei
+      - PORT=5002
+      - DB_PATH=/app/data/accounting.db
