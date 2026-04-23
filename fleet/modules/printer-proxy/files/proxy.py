@@ -330,6 +330,40 @@ def udp_3289():
 
 # ── 常駐印表機連線 ─────────────────────────────────────────────────────────────
 
+BROADCAST_IP = "192.168.1.255"
+
+def broadcast_presence():
+    """印表機連線成功後廣播，讓平板重新感知印表機上線（解決 proxy 重啟後平板不重連問題）"""
+    def _do():
+        # 等 UDP socket 就緒
+        for _ in range(20):
+            with _udp_sock_lock:
+                if _udp_sock_ref[0]:
+                    break
+            time.sleep(0.5)
+
+        # 廣播 3 次（間隔 3 秒），確保平板收到
+        for i in range(3):
+            # DISCOVER 回應：宣告印表機存在
+            pl_disc = bytes.fromhex(
+                '55422d45454145303833454e534e'
+                '000000000000000000000000000000000000'
+                '0001ffff15000200' + MY_MAC + '0000000100000001')
+            udp_send(make_enpc('q', '00000000', pl_disc), (BROADCAST_IP, 3289))
+
+            # DEVICE_NAME 廣播：宣告型號為 TM-m30II
+            model = b'TM-m30II\x00'
+            pl_name = bytearray(133)
+            pl_name[0:5] = bytes([0, 5, 1, 2, 1])
+            pl_name[5:5 + len(model)] = model
+            udp_send(make_enpc('q', '03000000', bytes(pl_name)), (BROADCAST_IP, 3289))
+
+            print(f"[{ts()}][BROADCAST] 廣播印表機上線通知 ({i+1}/3)")
+            if i < 2:
+                time.sleep(3)
+
+    threading.Thread(target=_do, daemon=True).start()
+
 def printer_loop():
     """保持與真實印表機的常駐 TCP 連線，自動重連；收到的資料轉發給平板"""
     while True:
@@ -343,6 +377,7 @@ def printer_loop():
             with _printer_lock:
                 _printer_sock[0] = s
             print(f"[{ts()}][PRINTER] 已連到 {PRINTER_IP}:{PRINTER_PORT}（常駐）")
+            broadcast_presence()  # 主動通知所有平板印表機已上線
 
             while True:
                 data = s.recv(4096)
