@@ -31,6 +31,11 @@ PRODUCT_MAP = {
     'Signature Duck Blood Jelly':    (84,  '招牌嫩鴨血'),
     'Duck Blood Jelly':              (84,  '招牌嫩鴨血'),
     'Tofu Curd':                     (69,  '小豆干'),
+    'Daxi Tofu Curd':                (None, '大溪豆干'),
+    'Shredded Konjac':               (None, '蒟蒻絲'),
+    'Handmade Frozen Tofu':          (None, '手工凍豆腐'),
+    'Scallop':                       (None, '北海貝'),
+    'Kyoto Scallop':                 (None, '北海貝'),
 }
 
 def ts():
@@ -44,7 +49,7 @@ def save_seen(seen):
     json.dump(list(seen), open(SEEN_FILE, 'w'))
 
 def ssh_get_new_orders(seen):
-    """從 pi52 撈最新 10 筆，過濾掉已知的"""
+    """從 pi52 撈最新 20 筆，過濾掉已知的"""
     cmd = ['ssh', '-o', 'ConnectTimeout=8', '-o', 'StrictHostKeyChecking=no',
            PI52_HOST,
            "python3 -c \""
@@ -84,60 +89,19 @@ def ocr_on_pi52(remote_img_path):
         print(f'[{ts()}] OCR on pi52 失敗: {e}')
         return {'items': [], 'total': None, 'ue_num': ''}
 
-def ocr_image(img_path):
-    return ''  # 不再使用本地 OCR
-
-def parse_order(text):
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-    items, total, ue_order_num = [], None, ''
-
-    for i, line in enumerate(lines):
-        # UberEats 訂單號（如 A48BE）
-        if not ue_order_num:
-            m = re.search(r'\b([A-Z][A-Z0-9]{4,7})\b', line)
-            if m and 'Uber' not in line and 'Eats' not in line:
-                ue_order_num = m.group(1)
-
-        # 品項行：N x 名稱 $price 或 N x 名稱
-        m = re.match(r'(\d+)\s*[xX×]\s+(.+?)(?:\s+\$?([\d,]+\.?\d*))?$', line)
-        if m:
-            qty = int(m.group(1))
-            name_raw = m.group(2).strip()
-            price_str = m.group(3)
-            price = float(price_str.replace(',','')) if price_str else None
-
-            # 英文品名
-            en_m = re.search(r'[A-Z][a-zA-Z\s]{3,}', name_raw)
-            en_name = en_m.group().strip() if en_m else ''
-
-            # 跨行英文品名（如 Special\nOriginal Meatball）
-            if not price and i+1 < len(lines):
-                next_l = lines[i+1]
-                if re.match(r'^[A-Z]', next_l) and '$' not in next_l and 'x ' not in next_l:
-                    en_name = (en_name + ' ' + next_l).strip()
-
-            items.append({'qty': qty, 'en_name': en_name, 'price': price, 'raw': name_raw})
-
-        # 已付金額
-        if re.search(r'已付|付金額', line):
-            pm = re.search(r'\$?([\d,]+)\.?\d*', line)
-            if pm: total = float(pm.group(1).replace(',',''))
-
-    return {'items': items, 'total': total, 'ue_order_num': ue_order_num}
-
-
 def map_items(raw_items):
     result = []
     for it in raw_items:
         en = it.get("en", it.get("en_name", ""))
         prod = None
-        for key, val in PRODUCT_MAP.items():
-            if key.lower() in en.lower() or en.lower() in key.lower():
-                prod = val
-                break
+        if en:
+            for key, val in PRODUCT_MAP.items():
+                if key.lower() in en.lower() or en.lower() in key.lower():
+                    prod = val
+                    break
         result.append({
             "id": prod[0] if prod else None,
-            "name": prod[1] if prod else it.get("raw", en)[:20],
+            "name": prod[1] if prod else it.get("name") or it.get("raw", en)[:20],
             "price": it.get("price") or 0,
             "qty": it.get("qty", 1)
         })
@@ -160,13 +124,17 @@ def map_and_create(order_data, row):
     for it in order_data['items']:
         en = it.get('en_name', it.get('en', ''))
         prod = None
-        for key, val in PRODUCT_MAP.items():
-            if key.lower() in en.lower() or en.lower() in key.lower():
-                prod = val; break
+        if en:
+            for key, val in PRODUCT_MAP.items():
+                if key.lower() in en.lower() or en.lower() in key.lower():
+                    prod = val
+                    break
+        price_raw = it.get('price') or 0
+        price_safe = 0 if price_raw > 500 else price_raw  # OCR 亂碼價格保護
         mapped_items.append({
             'id': prod[0] if prod else None,
-            'name': prod[1] if prod else it['raw'][:20],
-            'price': it['price'] or 0,
+            'name': prod[1] if prod else it.get('name') or it['raw'][:20],
+            'price': price_safe,
             'qty': it['qty']
         })
 
@@ -195,11 +163,10 @@ def map_and_create(order_data, row):
     order_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 
     for it in mapped_items:
-        if it['id']:
-            conn.execute('''INSERT INTO order_items
-              (order_id,product_id,product_name,unit_price,quantity,subtotal)
-              VALUES (?,?,?,?,?,?)''',
-              (order_id, it['id'], it['name'], it['price'], it['qty'], it['price']*it['qty']))
+        conn.execute('''INSERT INTO order_items
+          (order_id,product_id,product_name,unit_price,quantity,subtotal)
+          VALUES (?,?,?,?,?,?)''',
+          (order_id, it.get('id'), it['name'], it['price'], it['qty'], it['price']*it['qty']))
 
     conn.commit(); conn.close()
     return order_num, order_id
@@ -221,13 +188,13 @@ while True:
             data["ue_order_num"] = ue_num
             data["customer"] = data.get("customer", "")
             items_count = len(data.get("items",[]))
-            print(f"[{ts()}] 品項: {items_count} 金額: {data.get("total")} UE#: {ue_num}")
+            print(f'[{ts()}] 品項: {items_count} 金額: {data.get("total")} UE#: {ue_num}')
 
             if data.get("items"):
                 num, oid = map_and_create(data, row)
-                print(f"[{ts()}] ✅ {num} (id={oid}) 已建立")
+                print(f'[{ts()}] ✅ {num} (id={oid}) 已建立')
             else:
-                print(f"[{ts()}] ⚠️  無品項，略過")
+                print(f'[{ts()}] ⚠️  無品項，略過')
     except Exception as e:
         print(f'[{ts()}] 主迴圈錯誤: {e}')
     time.sleep(5)

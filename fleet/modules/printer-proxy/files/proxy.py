@@ -97,7 +97,7 @@ def parse_and_save_order(raw_data: bytes, tablet_ip: str):
     con.commit(); con.close()
     print(f'[{ts()}][訂單] 已儲存 job_id={job_id} → {fname}')
 
-MY_IP        = "192.168.0.21"
+MY_IP        = "192.168.1.109"
 MY_MAC       = "2ccf676b0c89"
 PRINTER_IP   = "192.168.1.124"
 PRINTER_PORT = 9100
@@ -283,6 +283,10 @@ def handle_enpc(data, addr, sock):
         udp_send(make_enpc('q', '03000000', bytes(pl)), addr)
         print(f"[{ts()}][UDP] DEVICE_NAME → {addr[0]}")
 
+    elif func == '03000015':  # print status
+        udp_send(make_enpc("q", "03000015", bytes(4)), addr)
+        print(f"[{ts()}][UDP] PRINT_STATUS -> {addr[0]}")
+
     elif func == '03000016':
         # 印表機狀態查詢，回傳 OK（否則平板連上 TCP 後立刻送 FIN）
         udp_send(make_enpc("q", "03000016", bytes(4)), addr)
@@ -400,13 +404,6 @@ def handle_conn(conn, addr):
                 break
             job_buffer.extend(data)
             print(f"[{ts()}][平板→印表機] {len(data)} bytes: {data[:40].hex()}")
-            # 偵測裁紙指令（GS V = 1D 56）→ 一份列印工作結束
-            if b'\x1d\x56' in data:
-                snapshot = bytes(job_buffer)
-                tablet   = addr[0]
-                threading.Thread(target=parse_and_save_order,
-                                 args=(snapshot, tablet), daemon=True).start()
-                job_buffer = bytearray()
             with _printer_lock:
                 p = _printer_sock[0]
             if p:
@@ -419,13 +416,15 @@ def handle_conn(conn, addr):
     except Exception as e:
         print(f"[{ts()}][平板→印表機] 結束：{e}")
     finally:
-        # 解析並顯示訂單
+        # TCP 連線關閉時儲存完整訂單圖片（避免裁紙指令在 binary 中誤判導致截斷）
         if len(job_buffer) > 20:
-            text = parse_escpos(bytes(job_buffer))
+            snapshot = bytes(job_buffer)
+            tablet   = addr[0]
+            threading.Thread(target=parse_and_save_order,
+                             args=(snapshot, tablet), daemon=True).start()
+            text = parse_escpos(snapshot)
             if text:
                 print(f"[{ts()}][訂單內容]\n{text}\n{'─'*40}")
-            else:
-                print(f"[{ts()}][訂單] 無法解析文字（{len(job_buffer)} bytes raw）")
 
         print(f"[{ts()}][TCP] 平板斷線 {addr[0]}")
         with _tablet_lock:
