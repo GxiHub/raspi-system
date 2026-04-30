@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>加熱監測</title>
+<style>
+:root {
+  --bg:     #1a1a2e;
+  --card:   #16213e;
+  --border: #0f3460;
+  --accent: #e94560;
+  --green:  #00b894;
+  --yellow: #f39c12;
+  --blue:   #3498db;
+  --text:   #eaeaea;
+  --muted:  #7f8c8d;
+  --dim:    #0d0d1a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; padding: 10px; }
+
+.top-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 10px 14px; margin-bottom: 10px;
+}
+.top-bar h1 { font-size: 0.95em; flex: 1; }
+.btn-back {
+  padding: 7px 14px; border: none; border-radius: 20px;
+  background: var(--border); color: var(--text); font-size: 0.82em;
+  font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block;
+}
+
+/* ── Alert Banner ── */
+#alert-banner {
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 10px;
+  font-weight: 700; font-size: 0.92em; display: none;
+}
+#alert-banner.warn     { background:#2a1f00; border:1.5px solid var(--yellow); color:var(--yellow); display:flex; animation:pulse 1.5s infinite; }
+#alert-banner.critical { background:#200a10; border:1.5px solid var(--accent);  color:var(--accent);  display:flex; animation:pulse 0.9s infinite; }
+#alert-banner.info     { background:#0a1f14; border:1.5px solid var(--green);   color:var(--green);   display:flex; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+.alert-msg  { flex:1; }
+.alert-time { font-size:0.72em; font-weight:400; opacity:0.7; margin-right:10px; }
+.alert-close { cursor:pointer; font-size:1.1em; opacity:0.7; }
+
+/* ── 3 large monitors ── */
+.monitor-grid {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 8px; margin-bottom: 10px;
+}
+.mon-box {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:14px; padding:12px 8px; text-align:center; transition:0.3s;
+}
+.mon-box.alert-box { border-color:var(--accent); background:#200a10; animation:pulse 1.5s infinite; }
+.mon-box.warn-box  { border-color:var(--yellow); background:#1a1000; }
+.mon-label { font-size:0.6em; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.05em; }
+.mon-val   { font-size:2.1em; font-weight:700; font-family:monospace; line-height:1.1; }
+.mon-unit  { font-size:0.6em; color:var(--muted); margin-top:2px; }
+.mon-trend { font-size:0.7em; color:var(--muted); margin-top:3px; height:1.3em; }
+
+/* ── Secondary row ── */
+.sec-row { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.sec-box {
+  flex:1; min-width:70px; background:var(--card); border:1px solid var(--border);
+  border-radius:10px; padding:7px 8px; text-align:center;
+}
+.sec-label { font-size:0.56em; color:var(--muted); margin-bottom:2px; text-transform:uppercase; }
+.sec-val   { font-size:1.0em; font-weight:700; font-family:monospace; }
+
+/* ── Power note ── */
+.pwr-note {
+  background:#0d0a00; border:1px solid #2a1f00; border-radius:8px;
+  padding:6px 12px; font-size:0.72em; color:var(--yellow);
+  margin-bottom:10px; display:none;
+}
+.pwr-note.show { display:block; }
+
+/* ── Timer card ── */
+.timer-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:14px; padding:14px 16px; margin-bottom:10px;
+}
+.timer-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+.timer-header h2 { font-size:0.9em; color:var(--muted); flex:1; }
+
+/* Session status pill */
+.sess-pill {
+  font-size:0.68em; padding:3px 10px; border-radius:10px;
+  font-family:monospace; font-weight:700;
+}
+.sess-pill.idle    { background:var(--dim); color:var(--muted); }
+.sess-pill.auto    { background:#0a2010; color:var(--green); }
+.sess-pill.manual  { background:#0a1020; color:var(--blue); }
+
+.timer-display {
+  font-size:3.4em; font-weight:700; font-family:monospace;
+  text-align:center; letter-spacing:0.05em;
+  margin-bottom:10px; background:var(--dim); border-radius:10px; padding:8px 4px;
+}
+.timer-display.running { color:var(--green); }
+.timer-display.paused  { color:var(--yellow); }
+.timer-display.stopped { color:var(--muted); }
+
+.timer-stats { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+.tstat {
+  flex:1; min-width:58px; background:var(--dim); border-radius:8px;
+  padding:6px 8px; text-align:center;
+}
+.tstat-label { font-size:0.56em; color:var(--muted); margin-bottom:2px; text-transform:uppercase; }
+.tstat-val   { font-size:0.92em; font-weight:700; font-family:monospace; }
+
+.timer-btns { display:flex; gap:8px; margin-bottom:12px; }
+.btn-t {
+  flex:1; padding:13px 6px; border:none; border-radius:10px;
+  font-size:0.95em; font-weight:700; cursor:pointer; transition:0.15s;
+}
+.btn-t:disabled { opacity:0.32; cursor:not-allowed; }
+.btn-start  { background:var(--green);  color:#fff; }
+.btn-pause  { background:var(--yellow); color:#000; }
+.btn-mark   { background:var(--border); color:var(--text); }
+.btn-reset  { background:#22223a;       color:var(--muted); }
+
+/* ── Events timeline ── */
+.events-section { margin-top:8px; }
+.events-header  { font-size:0.78em; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.evt-count { font-size:0.75em; background:var(--border); border-radius:8px; padding:1px 7px; }
+.events-list { display:flex; flex-direction:column; gap:4px; max-height:200px; overflow-y:auto; }
+.evt-item {
+  display:flex; align-items:flex-start; gap:8px;
+  background:var(--dim); border-radius:7px; padding:6px 10px;
+  border-left:3px solid var(--muted); font-size:0.8em;
+}
+.evt-item.critical { border-left-color:var(--accent); }
+.evt-item.warn     { border-left-color:var(--yellow); }
+.evt-item.info     { border-left-color:var(--green); }
+.evt-dot  { width:7px; height:7px; border-radius:50%; background:var(--muted); margin-top:4px; flex-shrink:0; }
+.evt-dot.critical { background:var(--accent); box-shadow:0 0 4px var(--accent); }
+.evt-dot.warn     { background:var(--yellow); }
+.evt-dot.info     { background:var(--green); }
+.evt-body { flex:1; min-width:0; }
+.evt-msg  { color:var(--text); }
+.evt-meta { font-size:0.82em; color:var(--muted); margin-top:1px; }
+.no-events { text-align:center; color:var(--muted); font-size:0.8em; padding:12px; }
+
+/* ── Marks ── */
+.marks-list { display:flex; flex-direction:column; gap:3px; margin-top:6px; max-height:120px; overflow-y:auto; }
+.mark-item {
+  display:flex; gap:8px; align-items:center;
+  background:var(--dim); border-radius:6px; padding:4px 10px; font-size:0.78em;
+}
+.mark-time { font-family:monospace; font-weight:700; color:var(--yellow); min-width:55px; }
+
+/* ── Chart ── */
+.chart-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:14px; padding:14px; margin-bottom:10px;
+}
+.chart-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px; flex-wrap:wrap; gap:6px;
+}
+.chart-title { font-size:0.85em; color:var(--muted); }
+.btn-sm {
+  padding:5px 12px; border:none; border-radius:7px; font-size:0.78em;
+  font-weight:700; cursor:pointer; background:var(--border); color:var(--text);
+}
+.btn-sm.red { background:#4a1010; color:#ff6b6b; }
+
+/* ── Session History ── */
+.hist-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:14px; margin-bottom:10px; overflow:hidden;
+}
+.hist-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; cursor:pointer; user-select:none;
+}
+.hist-header h2 { font-size:0.88em; color:var(--muted); }
+.hist-toggle { font-size:0.75em; color:var(--muted); }
+.hist-body  { display:none; padding:0 12px 12px; }
+.hist-body.open { display:block; }
+.hist-list  { display:flex; flex-direction:column; gap:6px; }
+.sess-item {
+  background:var(--dim); border-radius:10px; padding:10px 12px;
+  border-left:3px solid var(--border); cursor:pointer; transition:0.15s;
+}
+.sess-item:hover { background:#12122a; }
+.sess-item.fault { border-left-color:var(--accent); }
+.sess-item.ok    { border-left-color:var(--green); }
+.sess-top  { display:flex; align-items:center; gap:8px; margin-bottom:3px; flex-wrap:wrap; }
+.sess-dt   { font-size:0.82em; font-weight:700; }
+.sess-dur  { font-size:0.72em; color:var(--muted); }
+.sess-badge { font-size:0.65em; padding:1px 7px; border-radius:8px; font-weight:700; white-space:nowrap; }
+.badge-fault { background:#3a0810; color:var(--accent); }
+.badge-ok    { background:#0a2010; color:var(--green); }
+.badge-run   { background:#0a1020; color:var(--blue); }
+.sess-info { font-size:0.72em; color:var(--muted); }
+.sess-detail { display:none; margin-top:8px; border-top:1px solid var(--border); padding-top:8px; }
+.sess-detail.open { display:block; }
+.det-evt { display:flex; gap:6px; align-items:flex-start; margin-bottom:4px; font-size:0.78em; }
+.det-time { color:var(--yellow); font-family:monospace; min-width:55px; flex-shrink:0; }
+.no-hist  { text-align:center; color:var(--muted); font-size:0.82em; padding:16px; }
+canvas { width:100% !important; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <a class="btn-back" href="/"
+     onclick="if(document.referrer||window.history.length>1){history.back();return false;}">
+    &#x2190; 返回
+  </a>
+  <h1>&#x1F321;&#xFE0F; 加熱監測</h1>
+  <span style="font-size:0.7em;color:var(--muted);" id="last-update">--</span>
+</div>
+
+<!-- Alert Banner -->
+<div id="alert-banner">
+  <span class="alert-time" id="alert-time"></span>
+  <span class="alert-msg"  id="alert-msg"></span>
+  <span class="alert-close" onclick="dismissAlert()">&#x2715;</span>
+</div>
+
+<!-- 3 large monitors -->
+<div class="monitor-grid">
+  <div class="mon-box" id="mon-pt100">
+    <div class="mon-label">PT100</div>
+    <div class="mon-val" id="mv-pt100" style="color:var(--yellow)">--</div>
+    <div class="mon-unit">°C</div>
+    <div class="mon-trend" id="trend-pt100">&nbsp;</div>
+  </div>
+  <div class="mon-box" id="mon-igbt">
+    <div class="mon-label">IGBT</div>
+    <div class="mon-val" id="mv-igbt" style="color:var(--green)">--</div>
+    <div class="mon-unit">°C</div>
+    <div class="mon-trend" id="trend-igbt">&nbsp;</div>
+  </div>
+  <div class="mon-box" id="mon-pwr">
+    <div class="mon-label">回讀功率</div>
+    <div class="mon-val" id="mv-pwr" style="color:var(--accent)">--</div>
+    <div class="mon-unit">%</div>
+    <div class="mon-trend" id="trend-pwr">&nbsp;</div>
+  </div>
+</div>
+
+<!-- Secondary row -->
+<div class="sec-row">
+  <div class="sec-box">
+    <div class="sec-label">命令功率</div>
+    <div class="sec-val" id="sv-cmd" style="color:var(--yellow)">--%</div>
+  </div>
+  <div class="sec-box">
+    <div class="sec-label">錯誤碼</div>
+    <div class="sec-val" id="sv-err">--</div>
+  </div>
+  <div class="sec-box">
+    <div class="sec-label">最高 PT100</div>
+    <div class="sec-val" id="sv-maxpt" style="color:var(--yellow)">--</div>
+  </div>
+  <div class="sec-box">
+    <div class="sec-label">最高 IGBT</div>
+    <div class="sec-val" id="sv-maxig" style="color:var(--green)">--</div>
+  </div>
+</div>
+
+<!-- Power deviation note (shows when actual != cmd) -->
+<div class="pwr-note" id="pwr-note">
+  &#x26A0;&#xFE0F; 回讀功率與命令功率差距 &gt;15%，屬電磁爐正常調制行為（實際輸出功率隨負載調整）
+</div>
+
+<!-- Heating Timer -->
+<div class="timer-card">
+  <div class="timer-header">
+    <h2>&#x23F1; 加熱計時</h2>
+    <span class="sess-pill idle" id="sess-pill">未記錄</span>
+  </div>
+  <div class="timer-display stopped" id="timer-display">00:00:00</div>
+
+  <div class="timer-stats">
+    <div class="tstat">
+      <div class="tstat-label">起始溫度</div>
+      <div class="tstat-val" id="ts-start">--°C</div>
+    </div>
+    <div class="tstat">
+      <div class="tstat-label">目前溫度</div>
+      <div class="tstat-val" id="ts-cur">--°C</div>
+    </div>
+    <div class="tstat">
+      <div class="tstat-label">升溫</div>
+      <div class="tstat-val" id="ts-delta">--</div>
+    </div>
+    <div class="tstat">
+      <div class="tstat-label">速率</div>
+      <div class="tstat-val" id="ts-rate">--°/m</div>
+    </div>
+    <div class="tstat">
+      <div class="tstat-label">記錄筆數</div>
+      <div class="tstat-val" id="ts-readings" style="color:var(--muted)">0</div>
+    </div>
+  </div>
+
+  <div class="timer-btns">
+    <button class="btn-t btn-start" id="btn-start"  onclick="timerStart()">&#x25B6; 開始</button>
+    <button class="btn-t btn-pause" id="btn-pause"  onclick="timerPause()" disabled>&#x23F8; 暫停</button>
+    <button class="btn-t btn-mark"  id="btn-mark"   onclick="timerMark()"  disabled>&#x1F4CC; 標記</button>
+    <button class="btn-t btn-reset" id="btn-reset"  onclick="timerReset()">&#x21BA; 重設</button>
+  </div>
+
+  <!-- Marks -->
+  <div id="marks-section" style="display:none;">
+    <div style="font-size:0.72em;color:var(--muted);margin-bottom:4px;">&#x1F4CC; 標記</div>
+    <div class="marks-list" id="marks-list"></div>
+  </div>
+
+  <!-- Events timeline -->
+  <div class="events-section">
+    <div class="events-header">
+      <span>&#x1F4CB; 事件紀錄</span>
+      <span class="evt-count" id="evt-count">0</span>
+    </div>
+    <div class="events-list" id="events-list">
+      <div class="no-events">加熱開始後自動記錄事件</div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart -->
+<div class="chart-card">
+  <div class="chart-header">
+    <span class="chart-title">&#x1F4C8; 溫度 / 功率 曲線</span>
+    <div style="display:flex;gap:6px;">
+      <button class="btn-sm" onclick="refreshChart()">&#x21BB;</button>
+      <button class="btn-sm red" onclick="clearLog()">清除</button>
+    </div>
+  </div>
+  <canvas id="temp-chart" height="230"></canvas>
+</div>
+
+<!-- Session History -->
+<div class="hist-card">
+  <div class="hist-header" onclick="toggleHist()">
+    <h2>&#x1F5C3; 歷史 Session</h2>
+    <span class="hist-toggle" id="hist-toggle">&#x25BC; 展開</span>
+  </div>
+  <div class="hist-body" id="hist-body">
+    <div class="hist-list" id="hist-list"><div class="no-hist">載入中...</div></div>
+  </div>
+</div>
+
+<script src="/static/chart.min.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────
+let chart        = null;
+let timerState   = 'stopped';
+let timerElapsed = 0;
+let timerIntId   = null;
+let timerStartTemp = null;
+let tempHistory  = [];
+let marks        = [];
+let maxPt100     = null, maxIgbt = null;
+let lastPt100    = null, lastIgbt = null, lastPwr = null, lastCmdPwr = null;
+let prevPt100    = null, prevIgbt = null, prevPwr = null;
+let lastAlertTs  = 0;
+let alertQueue   = [];
+let alertShowing = false;
+let histOpen     = false;
+let activeSessionId = null;  // session managed by backend
+
+const $ = id => document.getElementById(id);
+
+// ── Helpers ──────────────────────────────────────────────────────
+function fmtTime(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return (h ? String(h).padStart(2,'0')+':' : '') +
+         String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');
+}
+function fmtDur(s) {
+  if (!s) return '0s';
+  if (s < 60) return s+'s';
+  if (s < 3600) return Math.floor(s/60)+'m'+(s%60 ? (s%60)+'s' : '');
+  return Math.floor(s/3600)+'h'+Math.floor((s%3600)/60)+'m';
+}
+function trendArrow(cur, prev) {
+  if (cur==null||prev==null) return '&nbsp;';
+  const d = cur-prev;
+  if (Math.abs(d)<0.5) return '<span style="color:var(--muted)">&#x2192;</span>';
+  return d>0 ? `<span style="color:#e74c3c">&#x2191; +${d.toFixed(1)}</span>`
+             : `<span style="color:#3498db">&#x2193; ${d.toFixed(1)}</span>`;
+}
+function escHtml(s) {
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ── Alert System ─────────────────────────────────────────────────
+function showAlert(level, msg, ts) {
+  const b = $('alert-banner');
+  b.className = level;
+  $('alert-msg').innerText  = msg;
+  $('alert-time').innerText = new Date(ts*1000).toLocaleTimeString('zh-TW');
+  alertShowing = true;
+  clearTimeout(b._auto);
+  if (level !== 'critical') b._auto = setTimeout(dismissAlert, 8000);
+}
+function dismissAlert() {
+  $('alert-banner').style.display = 'none';
+  alertShowing = false;
+  if (alertQueue.length) { const n=alertQueue.shift(); showAlert(n.level,n.msg,n.ts); }
+}
+
+async function pollAlerts() {
+  try {
+    const r = await fetch('/api/alerts?since='+lastAlertTs);
+    const data = await r.json();
+    data.forEach(a => {
+      if (a.ts > lastAlertTs) lastAlertTs = a.ts;
+      if (!alertShowing) showAlert(a.level, a.msg, a.ts);
+      else alertQueue.push(a);
+    });
+  } catch(e) {}
+}
+
+// ── Status polling ────────────────────────────────────────────────
+async function refreshStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+
+    prevPt100 = lastPt100; prevIgbt = lastIgbt; prevPwr = lastPwr;
+    lastPt100  = d.temp;
+    lastIgbt   = d.induction_igbt_temp;
+    lastPwr    = d.induction_actual_pwr;
+    lastCmdPwr = d.induction_pwr;
+
+    // PT100
+    const pt = lastPt100;
+    $('mv-pt100').innerText = pt!=null ? pt.toFixed(1) : '--';
+    $('mv-pt100').style.color = pt!=null&&pt>=100 ? '#e74c3c' : 'var(--yellow)';
+    $('mon-pt100').className = 'mon-box'+(pt!=null&&pt>=100?' alert-box':'');
+    if (pt!=null && (maxPt100==null||pt>maxPt100)) { maxPt100=pt; $('sv-maxpt').innerText=pt.toFixed(1)+'°C'; }
+    $('trend-pt100').innerHTML = trendArrow(pt, prevPt100);
+    if (timerState!=='stopped' && pt!=null) $('ts-cur').innerText = pt.toFixed(1)+'°C';
+
+    // IGBT
+    const ig = lastIgbt;
+    $('mv-igbt').innerText = ig!=null ? ig : '--';
+    $('mv-igbt').style.color = ig!=null&&ig>=80 ? '#e74c3c' : ig!=null&&ig>=70 ? 'var(--yellow)' : 'var(--green)';
+    $('mon-igbt').className = 'mon-box'+(ig!=null&&ig>=80?' alert-box':ig!=null&&ig>=70?' warn-box':'');
+    if (ig!=null && (maxIgbt==null||ig>maxIgbt)) { maxIgbt=ig; $('sv-maxig').innerText=ig+'°C'; }
+    $('trend-igbt').innerHTML = trendArrow(ig, prevIgbt);
+
+    // Power + deviation note
+    $('mv-pwr').innerText = lastPwr!=null ? lastPwr : '--';
+    $('trend-pwr').innerHTML = trendArrow(lastPwr, prevPwr);
+    $('sv-cmd').innerText = lastCmdPwr!=null ? lastCmdPwr+'%' : '--%';
+    const showNote = lastPwr!=null && lastCmdPwr!=null && lastCmdPwr>0 && Math.abs(lastPwr-lastCmdPwr)>15;
+    $('pwr-note').className = 'pwr-note'+(showNote?' show':'');
+
+    // Error
+    const errEl = $('sv-err');
+    if (d.induction_error===0) { errEl.innerText='正常'; errEl.style.color='var(--green)'; }
+    else if (d.induction_error!=null) {
+      errEl.innerText='E'+d.induction_error.toString(16).toUpperCase().padStart(2,'0');
+      errEl.style.color='var(--accent)';
+    } else { errEl.innerText='--'; errEl.style.color='var(--muted)'; }
+
+    // Timer stats when running
+    if (timerState==='running' && pt!=null) {
+      if (timerStartTemp!=null) {
+        const delta = pt-timerStartTemp;
+        $('ts-delta').innerText = (delta>=0?'+':'')+delta.toFixed(1)+'°C';
+        $('ts-delta').style.color = delta>0 ? '#e74c3c' : '#3498db';
+      }
+      tempHistory.push({t:timerElapsed, temp:pt});
+      if (tempHistory.length>60) tempHistory.shift();
+      if (tempHistory.length>=3) {
+        const n=tempHistory.length-1;
+        const dT=tempHistory[n].temp-tempHistory[0].temp;
+        const dt=(tempHistory[n].t-tempHistory[0].t)||1;
+        const rate=dT/dt*60;
+        $('ts-rate').innerText=(rate>=0?'+':'')+rate.toFixed(1)+'°/m';
+        $('ts-rate').style.color=rate>0?'#e74c3c':'#3498db';
+      }
+    }
+
+    $('last-update').innerText = new Date().toLocaleTimeString('zh-TW');
+  } catch(e) {}
+}
+
+// ── Session sync (backend auto-managed) ──────────────────────────
+async function syncSession() {
+  try {
+    const r = await fetch('/api/session/current');
+    const d = await r.json();
+    if (d.active) {
+      if (activeSessionId !== d.id) {
+        // New session started (from main page auto_temp)
+        activeSessionId = d.id;
+        lastAlertTs = d.start_ts - 1;
+        updateSessionPill('auto', d.id);
+      }
+      renderEvents(d.events);
+      $('ts-readings').innerText = d.reading_count;
+    } else {
+      if (activeSessionId) {
+        // Session just ended
+        activeSessionId = null;
+        updateSessionPill('idle', '未記錄');
+        loadHistory();  // refresh history list
+      }
+    }
+  } catch(e) {}
+}
+
+function updateSessionPill(type, label) {
+  const p = $('sess-pill');
+  p.className = 'sess-pill ' + type;
+  if (type === 'auto')   p.innerText = '自動記錄 ' + label;
+  else if (type === 'manual') p.innerText = '計時中 ' + label;
+  else p.innerText = label;
+}
+
+function renderEvents(events) {
+  const list = $('events-list');
+  $('evt-count').innerText = events.length;
+  if (!events.length) {
+    list.innerHTML = '<div class="no-events">尚無事件</div>';
+    return;
+  }
+  list.innerHTML = [...events].reverse().map(e => `
+    <div class="evt-item ${e.level}">
+      <div class="evt-dot ${e.level}"></div>
+      <div class="evt-body">
+        <div class="evt-msg">${escHtml(e.msg)}</div>
+        <div class="evt-meta">${e.dt}
+          ${e.pt100!=null ? '&nbsp;PT100 '+e.pt100.toFixed(1)+'°C' : ''}
+          ${e.igbt !=null ? '&nbsp;IGBT '+e.igbt+'°C' : ''}
+          ${e.cmd_pwr!=null ? '&nbsp;'+e.cmd_pwr+'%' : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Timer (local only, no session API) ────────────────────────────
+function timerStart() {
+  if (timerState==='stopped') {
+    timerElapsed=0; timerStartTemp=lastPt100;
+    $('ts-start').innerText = timerStartTemp!=null ? timerStartTemp.toFixed(1)+'°C' : '--°C';
+    $('ts-delta').innerText='--'; $('ts-rate').innerText='--°/m';
+    tempHistory=[]; marks=[]; renderMarks();
+    maxPt100=lastPt100; maxIgbt=lastIgbt;
+    if (maxPt100!=null) $('sv-maxpt').innerText=maxPt100.toFixed(1)+'°C';
+    if (maxIgbt !=null) $('sv-maxig').innerText=maxIgbt+'°C';
+  }
+  timerState='running';
+  timerIntId=setInterval(()=>{timerElapsed++;updateTimerDisplay();},1000);
+  updateTimerUI();
+}
+function timerPause() {
+  if (timerState==='running') { clearInterval(timerIntId); timerState='paused'; updateTimerUI(); }
+  else if (timerState==='paused') { timerStart(); }
+}
+function timerReset() {
+  clearInterval(timerIntId);
+  timerState='stopped'; timerElapsed=0; timerStartTemp=null; tempHistory=[]; marks=[];
+  renderMarks();
+  $('ts-start').innerText='--°C'; $('ts-cur').innerText='--°C';
+  $('ts-delta').innerText='--'; $('ts-rate').innerText='--°/m';
+  updateTimerUI();
+}
+function timerMark() {
+  if (timerState!=='running') return;
+  marks.push({elapsed:timerElapsed,pt100:lastPt100,igbt:lastIgbt,pwr:lastPwr});
+  renderMarks();
+}
+function renderMarks() {
+  const s=$('marks-section');
+  if (!marks.length){s.style.display='none';return;}
+  s.style.display='block';
+  $('marks-list').innerHTML=marks.map((m,i)=>`
+    <div class="mark-item">
+      <span style="font-size:0.7em;color:var(--muted)">#${i+1}</span>
+      <span class="mark-time">${fmtTime(m.elapsed)}</span>
+      <span style="color:var(--yellow)">${m.pt100!=null?m.pt100.toFixed(1):'--'}°C</span>
+      <span style="color:var(--green)">&nbsp;IGBT ${m.igbt!=null?m.igbt:'--'}°C</span>
+      <span style="color:var(--accent)">&nbsp;${m.pwr!=null?m.pwr:'--'}%</span>
+    </div>`).join('');
+}
+function updateTimerDisplay() {
+  const el=$('timer-display');
+  el.innerText=fmtTime(timerElapsed);
+  el.className='timer-display '+timerState;
+}
+function updateTimerUI() {
+  const run=timerState==='running', psd=timerState==='paused', stp=timerState==='stopped';
+  $('btn-start').style.display=(stp||psd)?'':'none';
+  $('btn-pause').style.display=run?'':'none';
+  $('btn-pause').disabled=!run; $('btn-mark').disabled=!run;
+  $('btn-start').innerText=psd?'▶ 繼續':'▶ 開始';
+  updateTimerDisplay();
+}
+
+// ── Chart ─────────────────────────────────────────────────────────
+function initChart() {
+  const ctx=$('temp-chart').getContext('2d');
+  chart=new Chart(ctx,{
+    data:{datasets:[
+      {type:'line',label:'PT100 (°C)',data:[],borderColor:'#f39c12',
+       backgroundColor:'rgba(243,156,18,0.08)',borderWidth:2.5,
+       pointRadius:0,tension:0.3,yAxisID:'yT',fill:true},
+      {type:'line',label:'IGBT (°C)',data:[],borderColor:'#00b894',
+       backgroundColor:'rgba(0,184,148,0.05)',borderWidth:2,
+       pointRadius:0,tension:0.3,yAxisID:'yT'},
+      {type:'line',label:'回讀功率 (%)',data:[],borderColor:'#e94560',
+       backgroundColor:'rgba(233,69,96,0.05)',borderWidth:1.5,
+       pointRadius:0,stepped:true,yAxisID:'yP'},
+    ]},
+    options:{
+      animation:false,responsive:true,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:'#eaeaea',font:{size:11},padding:14}},
+        tooltip:{backgroundColor:'#16213e',borderColor:'#0f3460',borderWidth:1,
+                 titleColor:'#7f8c8d',bodyColor:'#eaeaea'}
+      },
+      scales:{
+        x:{ticks:{color:'#7f8c8d',maxTicksLimit:8,font:{size:10}},grid:{color:'#0f3460'}},
+        yT:{position:'left',min:0,max:120,
+            ticks:{color:'#f39c12',font:{size:10}},grid:{color:'#0f3460'},
+            title:{display:true,text:'°C',color:'#f39c12',font:{size:10}}},
+        yP:{position:'right',min:0,max:100,
+            ticks:{color:'#e94560',font:{size:10}},grid:{drawOnChartArea:false},
+            title:{display:true,text:'%',color:'#e94560',font:{size:10}}}
+      }
+    }
+  });
+}
+async function refreshChart() {
+  if(!chart)return;
+  try{
+    const r=await fetch('/api/temp_log');
+    const data=await r.json();
+    if(!data.length)return;
+    const t0=data[0].ts;
+    chart.data.labels=data.map(d=>{const s=d.ts-t0;return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');});
+    chart.data.datasets[0].data=data.map(d=>d.temp);
+    chart.data.datasets[1].data=data.map(d=>d.igbt??null);
+    chart.data.datasets[2].data=data.map(d=>d.apwr??null);
+    chart.update('none');
+  }catch(e){}
+}
+async function clearLog() {
+  if(!confirm('清除所有溫度記錄？'))return;
+  await fetch('/api/temp_log/clear',{method:'POST'});
+  chart.data.labels=[];chart.data.datasets.forEach(ds=>ds.data=[]);
+  chart.update('none');
+}
+
+// ── History ───────────────────────────────────────────────────────
+function toggleHist() {
+  histOpen=!histOpen;
+  $('hist-body').className='hist-body'+(histOpen?' open':'');
+  $('hist-toggle').innerHTML=histOpen?'&#x25B2; 收合':'&#x25BC; 展開';
+  if(histOpen) loadHistory();
+}
+async function loadHistory() {
+  const list=$('hist-list');
+  try{
+    const r=await fetch('/api/sessions');
+    const sessions=await r.json();
+    if(!sessions.length){list.innerHTML='<div class="no-hist">尚無記錄</div>';return;}
+    list.innerHTML=sessions.map(s=>`
+      <div class="sess-item ${s.has_fault?'fault':'ok'}" onclick="toggleDetail('${s.id}')">
+        <div class="sess-top">
+          <span class="sess-dt">${s.start_dt}</span>
+          <span class="sess-dur">${fmtDur(s.duration)}</span>
+          <span class="sess-badge ${s.has_fault?'badge-fault':s.ended?'badge-ok':'badge-run'}">
+            ${s.has_fault?'⚠ 故障':''}${!s.has_fault&&s.ended?'正常':''}${!s.ended?'進行中':''}
+          </span>
+        </div>
+        <div class="sess-info">
+          ${s.reading_count} 筆 &nbsp;|&nbsp; ${s.event_count} 事件
+          ${s.start_pt100!=null?'&nbsp;|&nbsp; 起始 '+s.start_pt100.toFixed(1)+'°C':''}
+        </div>
+        <div class="sess-detail" id="detail-${s.id}">
+          ${s.events.length?s.events.map(e=>`
+            <div class="det-evt">
+              <span class="det-time">${e.dt}</span>
+              <span style="color:${e.level==='critical'?'var(--accent)':e.level==='warn'?'var(--yellow)':'var(--green)'}">
+                ${escHtml(e.msg)}
+              </span>
+            </div>`).join(''):'<div style="color:var(--muted);font-size:0.8em;">無事件</div>'}
+        </div>
+      </div>`).join('');
+  }catch(e){list.innerHTML='<div class="no-hist">載入失敗</div>';}
+}
+function toggleDetail(id) {
+  const el=$('detail-'+id);
+  if(el) el.classList.toggle('open');
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+initChart();
+updateTimerUI();
+refreshStatus();
+refreshChart();
+syncSession();
+setInterval(refreshStatus, 2000);
+setInterval(refreshChart,  5000);
+setInterval(pollAlerts,    3000);
+setInterval(syncSession,   5000);
+</script>
+</body>
+</html>

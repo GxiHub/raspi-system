@@ -1,0 +1,1667 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>煮麵自動化系統</title>
+<style>
+:root {
+    --bg:      #f0f3f7;
+    --card:    #ffffff;
+    --border:  #c5cfe0;
+    --accent:  #d63031;
+    --green:   #00875a;
+    --yellow:  #c0392b;
+    --text:    #1a2332;
+    --muted:   #546e8a;
+    --disabled:#b2bec9;
+    --inner:   #e8edf4;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, sans-serif;
+    font-size: 18px;
+    padding: 12px;
+    min-height: 100vh;
+}
+
+/* ── 頂部：電磁爐 + 溫度 ── */
+.top-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.temp-block {
+    background: var(--inner);
+    border-radius: 12px;
+    padding: 12px 20px;
+    text-align: center;
+    min-width: 110px;
+}
+.temp-label { font-size: 0.9em; color: var(--muted); margin-bottom: 4px; }
+.temp-value { font-size: 2.8em; font-weight: 700; color: var(--yellow); font-family: monospace; }
+.temp-unit  { font-size: 0.9em; color: var(--muted); }
+
+.induction-block { flex: 1; min-width: 220px; }
+.induction-block h3 { font-size: 0.9em; color: var(--muted); margin-bottom: 10px; }
+.pwr-display {
+    background: var(--inner);
+    color: var(--yellow);
+    font-family: monospace;
+    font-size: 1.6em;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 10px;
+    display: inline-block;
+    min-width: 90px;
+}
+.pwr-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pwr-btns button {
+    flex: 1;
+    padding: 10px 4px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.95em;
+    cursor: pointer;
+    background: var(--border);
+    color: var(--text);
+    transition: 0.15s;
+}
+.pwr-btns button:hover { opacity: 0.85; }
+.pwr-btns .btn-max { background: var(--accent); color: white; }
+input[type=range] {
+    width: 100%;
+    accent-color: var(--yellow);
+    height: 6px;
+}
+
+/* ── 自動溫控 ── */
+.auto-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+.auto-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.auto-header h3 { font-size: 1em; }
+.toggle-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9em;
+    cursor: pointer;
+    background: var(--disabled);
+    color: var(--muted);
+    transition: 0.2s;
+}
+.toggle-btn.on { background: var(--green); color: white; }
+.auto-cfg {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.cfg-item {
+    background: var(--inner);
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+    cursor: pointer;
+    flex: 1;
+    min-width: 80px;
+    transition: 0.15s;
+}
+.cfg-item:hover { border: 1px solid var(--border); }
+.cfg-label { font-size: 0.7em; color: var(--muted); display: block; margin-bottom: 2px; }
+.cfg-val   { font-size: 1.1em; font-weight: 700; color: var(--yellow); }
+
+/* ── 推桿 Grid ── */
+.actuator-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.act-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.act-card.working  { border-color: var(--yellow); background: #fff8e1; }
+.act-card.disabled { opacity: 0.38; pointer-events: none; }
+
+.act-title { font-size: 1em; font-weight: 700; color: var(--muted); text-align: center; }
+
+.status-box {
+    background: var(--inner);
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+}
+.status-txt  { font-size: 0.85em; color: var(--muted); display: block; }
+.timer-val   { font-size: 1.7em; font-weight: 700; font-family: monospace; color: var(--green); display: block; }
+
+.time-settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+.time-box {
+    background: var(--inner);
+    border-radius: 6px;
+    padding: 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.15s;
+}
+.time-box:hover  { border: 1px solid var(--border); }
+.time-box small  { font-size: 0.8em; color: var(--muted); display: block; }
+.time-box .tval  { font-size: 1.2em; font-weight: 700; color: var(--yellow); }
+
+.mode-btns { display: flex; flex-direction: column; gap: 6px; }
+.btn-mode {
+    padding: 32px 6px;
+    border: none;
+    border-radius: 8px;
+    background: var(--border);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1.25em;
+    cursor: pointer;
+    transition: 0.15s;
+}
+.btn-mode:hover:not(:disabled) { background: #3d6fa8; }
+.btn-mode:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-stop {
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: white;
+    font-weight: 700;
+    font-size: 1.1em;
+    cursor: pointer;
+    display: none;
+}
+
+/* ── 全域時間設定列 ── */
+.time-config-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+}
+.time-config-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.time-config-title { font-size: 0.9em; font-weight: 700; color: var(--muted); }
+.btn-add-mode {
+    padding: 7px 14px;
+    border: none;
+    border-radius: 20px;
+    background: var(--green);
+    color: white;
+    font-weight: 700;
+    font-size: 0.85em;
+    cursor: pointer;
+}
+.time-config-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.time-config-grid .time-box {
+    flex: 1;
+    min-width: 70px;
+    position: relative;
+}
+
+/* ── 新增模式 Modal ── */
+#add-mode-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+#add-mode-modal.show { display: flex; }
+.add-mode-input {
+    width: 100%;
+    background: var(--inner);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 12px;
+    font-size: 1.1em;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ── 系統狀態 ── */
+.health-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+.health-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.health-header h3 { font-size: 0.9em; color: var(--muted); flex: 1; }
+.uptime-txt { font-size: 0.75em; color: var(--muted); }
+.btn-diag {
+    padding: 7px 16px;
+    border: none;
+    border-radius: 20px;
+    background: var(--border);
+    color: var(--text);
+    font-size: 0.85em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-diag:hover { background: #3d6fa8; }
+.btn-diag.running { opacity: 0.6; pointer-events: none; }
+.device-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+@media (min-width: 500px) {
+    .device-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.device-item {
+    background: var(--inner);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+}
+.dot.ok  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot.err { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.device-info { min-width: 0; }
+.device-name  { font-size: 0.75em; color: var(--text); font-weight: 700; }
+.device-addr  { font-size: 0.65em; color: var(--muted); }
+.device-value { font-size: 0.7em; color: var(--yellow); }
+
+/* ── 確認 Modal ── */
+#confirm-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    display: none;
+}
+#confirm-modal.show { display: flex; }
+.modal-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 24px;
+    text-align: center;
+    max-width: 300px;
+    width: 90%;
+}
+.modal-title {
+    font-size: 1.1em;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+.modal-sub {
+    font-size: 0.85em;
+    color: var(--muted);
+    margin-bottom: 24px;
+}
+.modal-btns {
+    display: flex;
+    gap: 12px;
+}
+.modal-btns button {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 1em;
+    font-weight: 700;
+    cursor: pointer;
+}
+.btn-cancel-modal { background: var(--disabled); color: var(--muted); }
+.btn-ok-modal     { background: var(--green);    color: white; }
+
+/* ── 數字鍵盤 ── */
+#keypad {
+    position: fixed;
+    bottom: -100%;
+    left: 0; right: 0;
+    background: var(--inner);
+    border-top: 2px solid var(--border);
+    padding: 20px;
+    transition: 0.35s ease;
+    z-index: 1000;
+}
+#keypad.show { bottom: 0; }
+.kp-display {
+    font-size: 2.5em;
+    text-align: center;
+    font-family: monospace;
+    color: var(--yellow);
+    font-weight: 700;
+    margin-bottom: 12px;
+    background: var(--inner);
+    border-radius: 8px;
+    padding: 8px;
+}
+.kp-label {
+    text-align: center;
+    font-size: 0.85em;
+    color: var(--muted);
+    margin-bottom: 12px;
+}
+.kp-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    max-width: 320px;
+    margin: 0 auto;
+}
+.kp-key {
+    padding: 18px;
+    font-size: 1.4em;
+    text-align: center;
+    border-radius: 10px;
+    cursor: pointer;
+    background: var(--border);
+    color: var(--text);
+    font-weight: 700;
+    user-select: none;
+    transition: 0.1s;
+}
+.kp-key:active { transform: scale(0.93); }
+.kp-del  { background: #fde8e8; color: #ff6b6b; }
+.kp-ok   { background: var(--green); color: white; }
+
+
+
+
+
+
+
+#w-prog-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #2980b9, var(--green));
+    border-radius: 20px;
+    transition: width 2s ease;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ── 版本控制 ── */
+.fab-version {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 1px solid #2a4a7a;
+    color: var(--text);
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 900;
+    transition: 0.2s;
+}
+.fab-version:hover { background: #3d6fa8; }
+.fab-fullscreen {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 1px solid #2a4a7a;
+    color: var(--text);
+    font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 900;
+    transition: 0.2s;
+    user-select: none;
+}
+.fab-fullscreen:hover { background: #3d6fa8; }
+
+#ver-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 1500;
+}
+#ver-modal.show { display: flex; }
+.ver-sheet {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px 20px 0 0;
+    padding: 20px;
+    width: 100%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.ver-sheet h2 { font-size: 1em; margin-bottom: 14px; }
+.ver-save-row {
+    display: flex; gap: 8px; margin-bottom: 16px;
+}
+.ver-save-row input {
+    flex: 1;
+    background: var(--inner);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 0.9em;
+}
+.btn-ver-save {
+    padding: 10px 18px;
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.ver-list { display: flex; flex-direction: column; gap: 8px; }
+.ver-item {
+    background: var(--inner);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.ver-info { flex: 1; min-width: 0; }
+.ver-label { font-size: 0.9em; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ver-date  { font-size: 0.72em; color: var(--muted); }
+.btn-restore {
+    padding: 8px 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.ver-empty { text-align: center; color: var(--muted); font-size: 0.85em; padding: 20px; }
+.btn-ver-close {
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--disabled);
+    color: var(--muted);
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
+/* ── UberEats 訂單入口 ── */
+.orders-entry-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--inner);
+    border: 1.5px solid #06c167;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin: 12px 0;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.orders-entry-card:hover { background: var(--inner); box-shadow: 0 0 12px rgba(6,193,103,0.3); }
+.orders-entry-left { display: flex; align-items: center; gap: 14px; }
+.orders-entry-icon { font-size: 2em; }
+.orders-entry-title { font-size: 1em; font-weight: 700; color: #06c167; }
+.orders-entry-sub { font-size: 0.72em; color: var(--muted); margin-top: 2px; }
+.orders-entry-right { text-align: center; }
+.orders-entry-count { font-size: 2em; font-weight: 900; color: #06c167; font-family: monospace; line-height: 1; }
+.orders-entry-label { font-size: 0.65em; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ① 全域時間設定（最上方） -->
+<div class="time-config-panel">
+    <div class="time-config-header">
+        <span class="time-config-title">⏱ 時間設定</span>
+        <button class="btn-add-mode" onclick="openAddModeModal()">＋ 新增</button>
+    </div>
+    <div class="time-config-grid" id="time-config-grid"></div>
+</div>
+
+<!-- ② 推桿 -->
+<div class="actuator-grid" id="act-grid"></div>
+
+<!-- ② 自動溫控 -->
+<div class="auto-panel" style="margin-top:10px;">
+    <div class="auto-header">
+        <h3>🌡️ 自動溫控</h3>
+        <button class="toggle-btn" id="auto-btn" onclick="toggleAutoTemp()">OFF</button>
+        <span id="auto-status" style="font-size:0.8em; color:var(--muted);">手動模式</span>
+    </div>
+    <div class="auto-cfg">
+        <div class="cfg-item" onclick="openKp('pwr_low','加熱功率(%)')">
+            <span class="cfg-label">加熱功率</span>
+            <span class="cfg-val" id="cfg-pwr_low">65</span><span style="font-size:0.7em">%</span>
+        </div>
+        <div class="cfg-item" onclick="openKp('pwr_high','衝刺功率(%)')">
+            <span class="cfg-label">衝刺功率</span>
+            <span class="cfg-val" id="cfg-pwr_high">70</span><span style="font-size:0.7em">%</span>
+        </div>
+        <div class="cfg-item" onclick="openKp('pwr_keep','保溫功率(%)')">
+            <span class="cfg-label">保溫功率</span>
+            <span class="cfg-val" id="cfg-pwr_keep">40</span><span style="font-size:0.7em">%</span>
+        </div>
+        <div class="cfg-item" onclick="openKp('temp_boost','衝刺起點(°C)')">
+            <span class="cfg-label">衝刺起點</span>
+            <span class="cfg-val" id="cfg-temp_boost">89</span><span style="font-size:0.7em">°C</span>
+        </div>
+        <div class="cfg-item" onclick="openKp('temp_keep','保溫起點(°C)')">
+            <span class="cfg-label">保溫起點</span>
+            <span class="cfg-val" id="cfg-temp_keep">100</span><span style="font-size:0.7em">°C</span>
+        </div>
+        <div class="cfg-item" onclick="openKp('temp_reheat','補熱閾值(°C)')">
+            <span class="cfg-label">補熱閾值</span>
+            <span class="cfg-val" id="cfg-temp_reheat">93</span><span style="font-size:0.7em">°C</span>
+        </div>
+    </div>
+</div>
+
+<!-- ③ 電磁爐 + 溫度（移至下方） -->
+<div class="top-panel" style="margin-top:10px;">
+    <div class="temp-block">
+        <div class="temp-label">目前溫度</div>
+        <div class="temp-value" id="temp-val">--</div>
+        <div class="temp-unit">°C</div>
+    </div>
+    <div class="induction-block">
+        <h3>🔥 電磁爐控制</h3>
+        <span class="pwr-display" id="pwr-val">0%</span>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+            <div style="flex:1;background:var(--inner);border-radius:8px;padding:5px 8px;text-align:center;">
+                <div style="font-size:0.62em;color:var(--muted);">IGBT 溫度</div>
+                <div style="font-size:0.95em;font-weight:700;color:#00b894;font-family:monospace;" id="igbt-val">--°C</div>
+            </div>
+            <div style="flex:1;background:var(--inner);border-radius:8px;padding:5px 8px;text-align:center;">
+                <div style="font-size:0.62em;color:var(--muted);">回讀功率</div>
+                <div style="font-size:0.95em;font-weight:700;color:var(--yellow);font-family:monospace;" id="ind-actual-pwr">--%</div>
+            </div>
+            <div style="flex:1;background:var(--inner);border-radius:8px;padding:5px 8px;text-align:center;">
+                <div style="font-size:0.62em;color:var(--muted);">錯誤碼</div>
+                <div style="font-size:0.95em;font-weight:700;font-family:monospace;" id="ind-err-val">--</div>
+            </div>
+        </div>
+        <div class="pwr-btns" id="pwr-btns">
+            <button onclick="setInduction(0)">關閉</button>
+            <button onclick="setInduction(35)">35%</button>
+            <button onclick="setInduction(40)">40%</button>
+            <button onclick="setInduction(43)">43%</button>
+            <button onclick="setInduction(46)">46%</button>
+        </div>
+        <input type="range" id="pwr-slider" min="0" max="46" value="0"
+               onchange="setInduction(this.value)">
+    </div>
+</div>
+
+<!-- ④ 系統狀態（最下方） -->
+<div class="health-panel" style="margin-top:10px;">
+    <div class="health-header">
+        <h3>🔌 系統狀態</h3>
+        <span class="uptime-txt" id="uptime-txt"></span>
+        <button class="btn-diag" id="diag-btn" onclick="runDiagnosis()">一鍵診斷</button>
+        <button class="btn-diag" onclick="softRefresh()">↺ 重新整理</button>
+        <a href="/temp_curve" target="_blank" class="btn-diag" style="text-decoration:none;">📈 曲線</a>
+        <a href="/orders" target="_blank" class="btn-diag" style="text-decoration:none;display:none;">📋 訂單</a>
+    </div>
+    <div class="device-grid" id="device-grid">
+        <div class="device-item"><div class="dot" id="dot-serial"></div><div class="device-info"><div class="device-name">序列埠</div><div class="device-addr">/dev/ttyUSB0</div></div></div>
+        <div class="device-item"><div class="dot" id="dot-temp"></div><div class="device-info"><div class="device-name">溫度感測器</div><div class="device-addr">0x08</div><div class="device-value" id="val-temp"></div></div></div>
+        <div class="device-item"><div class="dot" id="dot-relay-0b"></div><div class="device-info"><div class="device-name">繼電器一</div><div class="device-addr">0x0B</div></div></div>
+        <div class="device-item"><div class="dot" id="dot-relay-0c"></div><div class="device-info"><div class="device-name">繼電器二</div><div class="device-addr">0x0C</div></div></div>
+        <div class="device-item"><div class="dot" id="dot-induction"></div><div class="device-info"><div class="device-name">電磁爐</div><div class="device-addr">0x01</div></div></div>
+    </div>
+</div>
+
+<!-- UberEats 訂單入口（隱藏） -->
+<div class="orders-entry-card" onclick="location.href='/orders'" style="display:none;">
+    <div class="orders-entry-left">
+        <div class="orders-entry-icon">🛵</div>
+        <div>
+            <div class="orders-entry-title">UberEats 訂單紀錄</div>
+            <div class="orders-entry-sub">查看收據圖片與歷史訂單</div>
+        </div>
+    </div>
+    <div class="orders-entry-right">
+        <div class="orders-entry-count" id="orders-total">--</div>
+        <div class="orders-entry-label">筆訂單</div>
+    </div>
+</div>
+
+
+
+
+<!-- 新增模式 Modal -->
+<div id="add-mode-modal">
+    <div class="modal-box">
+        <div class="modal-title">新增動作</div>
+        <input type="text" id="new-mode-name" class="add-mode-input" placeholder="輸入動作名稱" maxlength="8">
+        <div class="modal-btns">
+            <button class="btn-cancel-modal" onclick="addModeCancel()">取消</button>
+            <button class="btn-ok-modal" onclick="addModeConfirm()">確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- ⑤ 確認 Modal -->
+<div id="confirm-modal">
+    <div class="modal-box">
+        <div class="modal-title" id="modal-title">確認開始？</div>
+        <div class="modal-sub"  id="modal-sub"></div>
+        <div class="modal-btns">
+            <button class="btn-cancel-modal" onclick="modalCancel()">取消</button>
+            <button class="btn-ok-modal"     onclick="modalOk()">確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- ⑥ 數字鍵盤 -->
+<div id="keypad">
+    <div class="kp-label" id="kp-label">輸入數值</div>
+    <div class="kp-display" id="kp-display">0</div>
+    <div class="kp-grid">
+        <div class="kp-key" onclick="kpIn(1)">1</div>
+        <div class="kp-key" onclick="kpIn(2)">2</div>
+        <div class="kp-key" onclick="kpIn(3)">3</div>
+        <div class="kp-key" onclick="kpIn(4)">4</div>
+        <div class="kp-key" onclick="kpIn(5)">5</div>
+        <div class="kp-key" onclick="kpIn(6)">6</div>
+        <div class="kp-key" onclick="kpIn(7)">7</div>
+        <div class="kp-key" onclick="kpIn(8)">8</div>
+        <div class="kp-key" onclick="kpIn(9)">9</div>
+        <div class="kp-key kp-del" onclick="kpDel()">⌫</div>
+        <div class="kp-key" onclick="kpIn(0)">0</div>
+        <div class="kp-key kp-ok"  onclick="kpOk()">OK</div>
+    </div>
+</div>
+
+<script>
+// ── 全域模式設定 ────────────────────────────────────────────────────────────
+// modes[0] 固定為升降（isTravel=true），其餘為烹飪模式
+let modes = [
+    { name: '升降',   sec: 5,   isTravel: true },
+    { name: '煮麵',   sec: 60 },
+    { name: '煮菜',   sec: 120 },
+    { name: '煮料',   sec: 180 },
+    { name: '煮鴨血', sec: 90 },
+];
+
+const ACTIVE  = [1, 2, 3, 4, 5, 6];
+const ALL_ACT = [1, 2, 3, 4, 5, 6];
+
+let running = {};
+let timers  = {};
+
+const getTravel     = () => modes[0].sec;
+const getActionModes = () => modes.filter(m => !m.isTravel);
+
+const MODE_COLORS = ['#e67e22','#27ae60','#2980b9','#922b21','#16a085','#8e44ad','#d35400','#1abc9c'];
+const getModeColor = i => MODE_COLORS[i % MODE_COLORS.length];
+
+// ── 渲染全域時間設定列 ──────────────────────────────────────────────────────
+function renderTimeConfig() {
+    const g = document.getElementById('time-config-grid');
+    let ai = 0;
+    g.innerHTML = modes.map((m, i) => {
+        const color = m.isTravel ? null : getModeColor(ai++);
+        const style = color ? `border-top:3px solid ${color};` : '';
+        return `
+        <div class="time-box" style="${style}"
+            onclick="openKp('mode-${i}','${m.name}秒數')"
+            ontouchstart="lpStart(event,${i})" ontouchend="lpEnd()" ontouchmove="lpEnd()"
+            onmousedown="lpStart(event,${i})" onmouseup="lpEnd()" onmouseleave="lpEnd()">
+            <small>${m.name}</small>
+            <span class="tval" id="msec-${i}">${m.sec}</span>s
+        </div>`;
+    }).join('');
+}
+
+// ── 長按刪除 ────────────────────────────────────────────────────────────────
+let _lpTimer = null;
+let _lpTarget = null;
+
+function lpStart(e, i) {
+    if (modes[i] && modes[i].isTravel) return;
+    _lpTarget = i;
+    _lpTimer = setTimeout(() => {
+        _lpTimer = null;
+        e.target.closest('.time-box').style.outline = '2px solid var(--accent)';
+        if (confirm('刪除「' + modes[i].name + '」？')) {
+            deleteMode(i);
+        } else {
+            e.target.closest('.time-box').style.outline = '';
+        }
+    }, 700);
+}
+
+function lpEnd() {
+    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+}
+
+// ── 渲染各推桿的模式按鈕 ────────────────────────────────────────────────────
+function renderModeBtns() {
+    const am = getActionModes();
+    ALL_ACT.forEach(ch => {
+        const el = document.getElementById(`mbtn-${ch}`);
+        if (!el) return;
+        el.innerHTML = am.map((m, i) => `
+            <button class="btn-mode" id="btn-${ch}-${i}"
+                onclick="startProcess(${ch},${i})"
+                style="background:${getModeColor(i)};color:#fff;"
+                ${running[ch] ? 'disabled' : ''}>${m.name}</button>`).join('');
+    });
+}
+
+// ── 建立推桿 Card（骨架，按鈕後續由 renderModeBtns 填入） ────────────────────
+const grid = document.getElementById('act-grid');
+ALL_ACT.forEach(ch => {
+    const disabled = !ACTIVE.includes(ch);
+    const card = document.createElement('div');
+    card.className = 'act-card' + (disabled ? ' disabled' : '');
+    card.id = `card-${ch}`;
+    card.innerHTML = `
+        <div class="act-title">推桿 ${ch}${disabled ? '（待接）' : ''}</div>
+        <div class="status-box">
+            <span class="status-txt" id="st-${ch}">READY</span>
+            <span class="timer-val"  id="tm-${ch}">--</span>
+        </div>
+        <div class="mode-btns" id="mbtn-${ch}"></div>
+        <button class="btn-stop" id="stop-${ch}" onclick="forceStop(${ch})">停止 / 收回</button>
+    `;
+    grid.appendChild(card);
+});
+
+// ── 新增模式 ────────────────────────────────────────────────────────────────
+function deleteMode(i) {
+    if (modes[i] && modes[i].isTravel) return;
+    modes.splice(i, 1);
+    renderTimeConfig();
+    renderModeBtns();
+    saveModesToServer();
+}
+
+function saveModesToServer() {
+    const payload = {};
+    modes.forEach((m, i) => {
+        payload[`mode-${i}-name`] = m.name;
+        payload[`mode-${i}-sec`]  = m.sec;
+        if (m.isTravel) payload[`mode-${i}-travel`] = true;
+    });
+    payload['modes-count'] = modes.length;
+    post('/api/settings', payload);
+}
+
+function openAddModeModal() {
+    document.getElementById('new-mode-name').value = '';
+    document.getElementById('add-mode-modal').classList.add('show');
+    setTimeout(() => document.getElementById('new-mode-name').focus(), 100);
+}
+function addModeCancel() {
+    document.getElementById('add-mode-modal').classList.remove('show');
+}
+function addModeConfirm() {
+    const name = document.getElementById('new-mode-name').value.trim();
+    if (!name) return;
+    const i = modes.length;
+    modes.push({ name, sec: 60 });
+    post('/api/settings', { [`mode-${i}-name`]: name, [`mode-${i}-sec`]: 60 });
+    renderTimeConfig();
+    renderModeBtns();
+    document.getElementById('add-mode-modal').classList.remove('show');
+}
+document.getElementById('new-mode-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addModeConfirm();
+});
+
+// ── 設定載入 ────────────────────────────────────────────────────────────────
+let serverSettings = {};
+
+async function loadAllSettings() {
+    try {
+        const r = await fetch('/api/settings');
+        serverSettings = await r.json();
+    } catch(e) { serverSettings = {}; }
+
+    // 有 modes-count 代表曾存過完整狀態，直接從 server 重建陣列
+    const count = serverSettings['modes-count'];
+    if (count !== undefined && count > 0) {
+        modes = [];
+        for (let i = 0; i < count; i++) {
+            const name = serverSettings[`mode-${i}-name`];
+            if (!name) continue;
+            modes.push({
+                name,
+                sec:      serverSettings[`mode-${i}-sec`] || 60,
+                isTravel: !!serverSettings[`mode-${i}-travel`] || undefined,
+            });
+        }
+        // 確保升降存在
+        if (!modes.find(m => m.isTravel)) {
+            modes.unshift({ name: '升降', sec: 5, isTravel: true });
+        }
+    } else {
+        // 第一次啟動，只更新預設秒數
+        modes.forEach((m, i) => {
+            const v = serverSettings[`mode-${i}-sec`];
+            if (v !== undefined) m.sec = v;
+        });
+    }
+
+    renderTimeConfig();
+    renderModeBtns();
+}
+
+// ── 推桿操作 ────────────────────────────────────────────────────────────────
+let _pendingConfirm = null;
+
+function startProcess(ch, modeIdx) {
+    if (running[ch]) return;
+    const am = getActionModes();
+    const mode = am[modeIdx];
+    if (!mode) return;
+    const cookSec   = mode.sec;
+    const travelSec = getTravel();
+
+    document.getElementById('modal-title').innerText = `開始${mode.name}？`;
+    document.getElementById('modal-sub').innerText =
+        `推桿 ${ch}　升降 ${travelSec}s　烹飪 ${cookSec}s`;
+    document.getElementById('confirm-modal').classList.add('show');
+
+    _pendingConfirm = async () => {
+        running[ch] = true;
+        setCardState(ch, true);
+        try {
+            setStatus(ch, '下降中...', travelSec);
+            await post('/api/up', { channel: ch });
+            await countdown(ch, travelSec);
+
+            setStatus(ch, mode.name, cookSec);
+            await countdown(ch, cookSec);
+
+            await forceStop(ch);
+        } catch(e) {
+            unlock(ch);
+        }
+    };
+}
+
+function modalOk() {
+    document.getElementById('confirm-modal').classList.remove('show');
+    if (_pendingConfirm) { _pendingConfirm(); _pendingConfirm = null; }
+}
+
+function modalCancel() {
+    document.getElementById('confirm-modal').classList.remove('show');
+    _pendingConfirm = null;
+}
+
+async function forceStop(ch) {
+    if (timers[ch]) clearInterval(timers[ch]);
+    const travelSec = getTravel();
+    setStatus(ch, '收回中...', travelSec);
+
+    post('/api/down_and_off', { channel: ch, travel_time: travelSec });
+    await countdown(ch, travelSec);
+    unlock(ch);
+}
+
+function countdown(ch, sec) {
+    return new Promise(resolve => {
+        let t = sec;
+        document.getElementById(`tm-${ch}`).innerText = t;
+        timers[ch] = setInterval(() => {
+            t--;
+            document.getElementById(`tm-${ch}`).innerText = Math.max(t, 0);
+            if (t <= 0) { clearInterval(timers[ch]); resolve(); }
+        }, 1000);
+    });
+}
+
+function setStatus(ch, txt, sec) {
+    document.getElementById(`st-${ch}`).innerText = txt;
+    document.getElementById(`tm-${ch}`).innerText = sec;
+}
+
+function unlock(ch) {
+    running[ch] = false;
+    setCardState(ch, false);
+    document.getElementById(`st-${ch}`).innerText = 'READY';
+    document.getElementById(`tm-${ch}`).innerText = '--';
+}
+
+function setCardState(ch, isRunning) {
+    document.getElementById(`card-${ch}`).classList.toggle('working', isRunning);
+    document.getElementById(`stop-${ch}`).style.display = isRunning ? 'block' : 'none';
+    getActionModes().forEach((_, i) => {
+        const btn = document.getElementById(`btn-${ch}-${i}`);
+        if (btn) btn.disabled = isRunning;
+    });
+}
+
+// ── 電磁爐 ──────────────────────────────────────────────────────────────────
+async function setInduction(pwr) {
+    pwr = parseInt(pwr);
+    document.getElementById('pwr-val').innerText = pwr + '%';
+    document.getElementById('pwr-slider').value  = pwr;
+    await post('/api/induction', { power: pwr });
+}
+
+// ── 自動溫控 ────────────────────────────────────────────────────────────────
+let autoOn = false;
+
+async function toggleAutoTemp() {
+    autoOn = !autoOn;
+    await post('/api/auto_temp', { enabled: autoOn });
+    await setFan3(autoOn);
+    updateAutoUI();
+}
+
+async function setFan3(on) {
+    fanState[3] = on;
+    await post('/api/fan', { fan: 3, on: on });
+    const btn = document.getElementById('fan-3');
+    if (btn) {
+        btn.classList.toggle('on', on);
+        btn.innerText = '風扇 3　' + (on ? 'ON' : 'OFF');
+    }
+}
+
+function updateAutoUI() {
+    const btn = document.getElementById('auto-btn');
+    const st  = document.getElementById('auto-status');
+    const pwrBtns = document.getElementById('pwr-btns');
+
+    btn.classList.toggle('on', autoOn);
+    btn.innerText = autoOn ? 'ON' : 'OFF';
+    st.innerText  = autoOn ? '自動控制中' : '手動模式';
+    pwrBtns.style.opacity = autoOn ? '0.4' : '1';
+    pwrBtns.style.pointerEvents = autoOn ? 'none' : 'auto';
+    document.getElementById('pwr-slider').disabled = autoOn;
+}
+
+async function updateCfg(key, val) {
+    const payload = { [key]: val };
+    await post('/api/auto_temp', payload);
+    document.getElementById(`cfg-${key}`).innerText = val;
+}
+
+// ── 風扇 ────────────────────────────────────────────────────────────────────
+let fanState = { 1: false, 2: false, 3: false };
+let tempChart = null;  // 溫度圖表（需在 refreshTempChart 呼叫前宣告）
+
+async function toggleFan(fan) {
+    fanState[fan] = !fanState[fan];
+    await post('/api/fan', { fan: fan, on: fanState[fan] });
+    const btn = document.getElementById(`fan-${fan}`);
+    btn.classList.toggle('on', fanState[fan]);
+    btn.innerText = `風扇 ${fan}　` + (fanState[fan] ? 'ON' : 'OFF');
+}
+
+// ── 數字鍵盤 ────────────────────────────────────────────────────────────────
+let kpTarget = null;
+
+function openKp(target, label) {
+    kpTarget = target;
+    document.getElementById('kp-label').innerText = label;
+    document.getElementById('kp-display').innerText = '';
+    document.getElementById('keypad').classList.add('show');
+}
+
+function kpIn(n) {
+    const d = document.getElementById('kp-display');
+    if (d.innerText === '0' || d.innerText === '') d.innerText = n;
+    else d.innerText += n;
+}
+
+function kpDel() {
+    const d = document.getElementById('kp-display');
+    d.innerText = d.innerText.slice(0, -1) || '0';
+}
+
+function kpOk() {
+    const val = parseInt(document.getElementById('kp-display').innerText) || 0;
+    document.getElementById('keypad').classList.remove('show');
+
+    // 全域模式時間設定
+    if (kpTarget && kpTarget.startsWith('mode-')) {
+        const i = parseInt(kpTarget.split('-')[1]);
+        if (!isNaN(i) && modes[i]) {
+            modes[i].sec = val;
+            const el = document.getElementById(`msec-${i}`);
+            if (el) el.innerText = val;
+            post('/api/settings', { [`mode-${i}-sec`]: val });
+        }
+        return;
+    }
+
+    // 推桿時間設定（舊版相容）
+    if (kpTarget && kpTarget.startsWith('act-')) {
+        serverSettings[kpTarget] = val;
+        post('/api/settings', { [kpTarget]: val });
+        const parts = kpTarget.split('-');
+        const tvEl = document.getElementById(`tv-${parts[1]}-${parts[2]}`);
+        if (tvEl) tvEl.innerText = val;
+        return;
+    }
+
+    // 自動溫控設定
+    const cfgKeys = ['heat_pwr','buffer_pwr','keep_pwr','buffer_temp','keep_temp'];
+    if (cfgKeys.includes(kpTarget)) {
+        updateCfg(kpTarget, val);
+        return;
+    }
+}
+
+// 點鍵盤外關閉
+document.addEventListener('click', e => {
+    if (!document.getElementById('keypad').contains(e.target) &&
+        !e.target.classList.contains('time-box') &&
+        !e.target.classList.contains('cfg-item')) {
+        document.getElementById('keypad').classList.remove('show');
+    }
+});
+
+// ── 狀態輪詢 ────────────────────────────────────────────────────────────────
+async function pollStatus() {
+    try {
+        const r   = await fetch('/api/status');
+        const d   = await r.json();
+
+        // 溫度
+        const tv = document.getElementById('temp-val');
+        tv.innerText = d.temp != null ? d.temp.toFixed(1) : '--';
+        tv.style.color = (d.temp != null && d.temp >= 100) ? '#e74c3c' : 'var(--yellow)';
+
+        // 電磁爐（自動模式時同步顯示）
+        if (d.auto_temp_on) {
+            document.getElementById('pwr-val').innerText   = d.induction_pwr + '%';
+            document.getElementById('pwr-slider').value    = d.induction_pwr;
+        }
+        // 電磁爐回讀監測
+        const igbtEl = document.getElementById('igbt-val');
+        if (igbtEl) igbtEl.innerText = d.induction_igbt_temp != null ? d.induction_igbt_temp + '°C' : '--°C';
+        const aprEl = document.getElementById('ind-actual-pwr');
+        if (aprEl) aprEl.innerText = d.induction_actual_pwr != null ? d.induction_actual_pwr + '%' : '--%';
+        const errEl = document.getElementById('ind-err-val');
+        if (errEl) {
+            if (d.induction_error === 0) {
+                errEl.innerText = '正常'; errEl.style.color = 'var(--green)';
+            } else if (d.induction_error != null) {
+                errEl.innerText = 'E' + d.induction_error.toString(16).toUpperCase().padStart(2,'0');
+                errEl.style.color = 'var(--accent)';
+            } else {
+                errEl.innerText = '--'; errEl.style.color = 'var(--muted)';
+            }
+        }
+
+        // 自動溫控狀態同步
+        if (autoOn !== d.auto_temp_on) {
+            autoOn = d.auto_temp_on;
+            updateAutoUI();
+        }
+
+        // 繼電器狀態
+        const rok = d.relay_ok || {};
+        ['0b','0c'].forEach(k => {
+            const el = document.getElementById('rdot-' + k);
+            if (!el) return;
+            el.className = 'relay-dot ' + (rok[k] ? 'ok' : 'fail');
+        });
+
+        // 自動溫控設定值同步
+        if (d.auto_cfg) {
+            ['pwr_low','pwr_high','pwr_keep','temp_boost','temp_keep','temp_reheat'].forEach(k => {
+                const el = document.getElementById('cfg-' + k);
+                if (el && d.auto_cfg[k] !== undefined) el.innerText = d.auto_cfg[k];
+            });
+        }
+
+        // 風扇狀態同步（頁面重整後恢復正確顯示）
+        if (d.fans) {
+            [1,2,3].forEach(f => {
+                const on = !!d.fans[f];
+                if (fanState[f] !== on) {
+                    fanState[f] = on;
+                    const btn = document.getElementById('fan-' + f);
+                    if (btn) {
+                        btn.classList.toggle('on', on);
+                        btn.innerText = '風扇 ' + f + '　' + (on ? 'ON' : 'OFF');
+                    }
+                }
+            });
+        }
+
+    } catch(e) { /* 網路暫時中斷，忽略 */ }
+}
+
+loadAllSettings();
+setInterval(pollStatus, 2000);
+pollStatus();
+try { initTempChart(); } catch(e) { console.warn('Chart.js not loaded', e); }
+setInterval(runDiagnosis, 60000);
+loadOrdersCount();
+setInterval(loadOrdersCount, 30000);  // 每 60 秒自動更新健康狀態
+
+// ── 軟刷新（不重載頁面，只重新同步狀態） ────────────────────────────────────
+async function loadOrdersCount() {
+    try {
+        const r = await fetch('/api/orders?limit=1000');
+        const d = await r.json();
+        const el = document.getElementById('orders-total');
+        if (el) el.textContent = d.length;
+    } catch(e) {}
+}
+
+async function softRefresh() {
+    await pollStatus();
+    await runDiagnosis();
+}
+
+// ── 系統診斷 ─────────────────────────────────────────────────────────────────
+async function runDiagnosis() {
+    const btn = document.getElementById('diag-btn');
+    btn.classList.add('running');
+    btn.innerText = '診斷中...';
+
+    // 先全部重置為灰色
+    ['serial', 'temp', 'relay-0b', 'relay-0c', 'induction'].forEach(k => {
+        const d = document.getElementById(`dot-${k}`);
+        if (d) { d.className = 'dot'; }
+    });
+
+    try {
+        const r = await fetch('/api/health');
+        const d = await r.json();
+
+        // 序列埠
+        setDot('serial', d.serial_ok);
+
+        // 各裝置
+        if (d.devices) {
+            setDot('temp',       d.devices.temp?.ok);
+            setDot('relay-0b',   d.devices.relay_0b?.ok);
+            setDot('relay-0c',   d.devices.relay_0c?.ok);
+            setDot('induction',  d.devices.induction?.ok);
+
+            const v = document.getElementById('val-temp');
+            if (v) v.innerText = d.devices.temp?.value || '';
+        }
+
+        // uptime
+        const u = document.getElementById('uptime-txt');
+        if (u && d.uptime) u.innerText = `啟動 ${d.uptime}`;
+
+    } catch(e) {
+        ['serial', 'temp', 'relay-0b', 'relay-0c', 'induction'].forEach(k => setDot(k, false));
+    }
+
+    btn.classList.remove('running');
+    btn.innerText = '一鍵診斷';
+}
+
+function setDot(key, ok) {
+    const d = document.getElementById(`dot-${key}`);
+    if (!d) return;
+    d.className = 'dot ' + (ok ? 'ok' : ok === false ? 'err' : '');
+}
+
+// 開機自動診斷
+window.addEventListener('load', () => setTimeout(runDiagnosis, 1000));
+
+// ── 工具函式 ────────────────────────────────────────────────────────────────
+async function post(url, data) {
+    const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return r.json();
+}
+
+// ── 加熱計時器 ──────────────────────────────────────────────────────────────────
+let wPhase = 'idle';       // idle | heating | paused | done
+let wElapsed = 0;
+let wStartTemp = null;
+let wTempHistory = [];
+let wIntervalId = null;
+let wPanelOpen = true;
+
+function toggleWaterPanel() {
+    wPanelOpen = !wPanelOpen;
+    document.getElementById('water-content').style.display = wPanelOpen ? 'block' : 'none';
+    document.getElementById('water-toggle-btn').textContent = wPanelOpen ? '收起' : '展開';
+}
+
+function wFmt(s) {
+    s = Math.max(0, Math.round(s));
+    return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+
+// called from pollStatus with current temp
+function wUpdateTemp(t) {
+    if (t === null || t === undefined) return;
+
+    if (wPhase === 'heating') {
+        wTempHistory.push({ time: wElapsed, temp: t });
+        if (wTempHistory.length > 30) wTempHistory.shift();
+    }
+
+    const base = wStartTemp !== null ? wStartTemp : t;
+    const pct = Math.min(100, Math.max(0, (t - base) / (100 - base) * 100));
+    document.getElementById('w-prog-bar').style.width = pct + '%';
+    document.getElementById('w-start-lbl').textContent = base.toFixed(0) + '°C';
+    document.getElementById('w-cur-lbl').textContent = '目前 ' + t.toFixed(1) + '°C';
+
+    // rate
+    if (wPhase === 'heating' && wTempHistory.length >= 3) {
+        const n = wTempHistory.length - 1;
+        const dT = wTempHistory[n].temp - wTempHistory[0].temp;
+        const dt = wTempHistory[n].time - wTempHistory[0].time;
+        const rate = dt > 0 ? dT / dt * 60 : 0;
+        document.getElementById('w-rate').textContent = (rate >= 0 ? '+' : '') + rate.toFixed(1) + '°/分';
+
+        // estimate remain
+        if (rate > 0) {
+            const remain = (100 - t) / (rate / 60);
+            document.getElementById('w-remain').textContent = wFmt(remain);
+        }
+    }
+
+    // done?
+    if (t >= 100 && wPhase === 'heating') wDone();
+}
+
+async function wStart() {
+if (wPhase !== 'idle' && wPhase !== 'paused') return;
+
+    const isNew = (wPhase === 'idle');
+
+    // 立即鎖定按鈕，防止重複點擊
+    wPhase = 'heating';
+    document.getElementById('w-btn-start').disabled = true;
+    document.getElementById('w-btn-pause').disabled = false;
+    document.getElementById('w-status-msg').textContent = '🔥 加熱中（自動溫控）...';
+    document.getElementById('w-done-bar').style.display = 'none';
+
+    if (isNew) {
+        const tvEl = document.getElementById('temp-val');
+        const tv = parseFloat(tvEl.innerText);
+        wStartTemp = isNaN(tv) ? null : tv;
+        wTempHistory = [];
+        clearTempLog();  // 不 await，背景清除
+    }
+
+    // 開啟自動溫控 + 風扇 3
+    try {
+        await post('/api/auto_temp', { enabled: true });
+        autoOn = true;
+        updateAutoUI();
+        await setFan3(true);
+    } catch(e) { console.warn('wStart API error', e); }
+
+    wIntervalId = setInterval(() => {
+        wElapsed++;
+        document.getElementById('w-elapsed').textContent = wFmt(wElapsed);
+    }, 1000);
+}
+
+async function wPause() {
+    if (wPhase === 'heating') {
+        clearInterval(wIntervalId);
+        wPhase = 'paused';
+        // 暫停 → 關自動溫控 + 風扇 3
+        await post('/api/auto_temp', { enabled: false });
+        autoOn = false;
+        updateAutoUI();
+        await setFan3(false);
+        document.getElementById('w-btn-pause').textContent = '▶ 繼續';
+        document.getElementById('w-btn-start').disabled = false;
+        document.getElementById('w-btn-start').textContent = '▶ 繼續';
+        document.getElementById('w-status-msg').textContent = '⏸ 已暫停（自動溫控已關）';
+    } else if (wPhase === 'paused') {
+        document.getElementById('w-btn-pause').textContent = '⏸ 暫停';
+        document.getElementById('w-btn-start').textContent = '▶ 開始';
+        wStart();
+    }
+}
+
+async function wReset() {
+    clearInterval(wIntervalId);
+    wPhase = 'idle';
+    wElapsed = 0;
+    wStartTemp = null;
+    wTempHistory = [];
+    // 關自動溫控 + 風扇 3
+    await post('/api/auto_temp', { enabled: false });
+    autoOn = false;
+    updateAutoUI();
+    await setFan3(false);
+    document.getElementById('w-elapsed').textContent = '0:00';
+    document.getElementById('w-remain').textContent = '--:--';
+    document.getElementById('w-rate').textContent = '--°/分';
+    document.getElementById('w-prog-bar').style.width = '0%';
+    document.getElementById('w-btn-start').textContent = '▶ 開始';
+    document.getElementById('w-btn-start').disabled = false;
+    document.getElementById('w-btn-pause').textContent = '⏸ 暫停';
+    document.getElementById('w-btn-pause').disabled = true;
+    document.getElementById('w-status-msg').textContent = '設定水量後按「開始」';
+    document.getElementById('w-done-bar').style.display = 'none';
+}
+
+async function wDone() {
+    clearInterval(wIntervalId);
+    wPhase = 'done';
+    // 達到 100°C，關自動溫控 + 風扇 3
+    await post('/api/auto_temp', { enabled: false });
+    autoOn = false;
+    updateAutoUI();
+    await setFan3(false);
+    document.getElementById('w-btn-start').disabled = true;
+    document.getElementById('w-btn-pause').disabled = true;
+    document.getElementById('w-done-time').textContent = wFmt(wElapsed);
+    document.getElementById('w-done-bar').style.display = 'block';
+    document.getElementById('w-status-msg').textContent = '✅ 已沸騰，自動溫控已關閉';
+}
+
+// ── 版本控制 ──────────────────────────────────────────────────────────────────
+async function openVerModal() {
+    document.getElementById('ver-modal').classList.add('show');
+    await loadVersions();
+}
+function closeVerModal() {
+    document.getElementById('ver-modal').classList.remove('show');
+}
+async function loadVersions() {
+    const list = document.getElementById('ver-list');
+    list.innerHTML = '<div class="ver-empty">載入中...</div>';
+    try {
+        const r = await fetch('/api/versions');
+        const versions = await r.json();
+        if (!versions.length) {
+            list.innerHTML = '<div class="ver-empty">尚無儲存的版本</div>';
+            return;
+        }
+        list.innerHTML = versions.map(v => `
+            <div class="ver-item">
+                <div class="ver-info">
+                    <div class="ver-label">${escHtml(v.label)}</div>
+                    <div class="ver-date">${v.datetime}</div>
+                </div>
+                <button class="btn-restore" onclick="restoreVersion('${v.id}','${escHtml(v.label)}')">還原</button>
+            </div>
+        `).join('');
+    } catch(e) {
+        list.innerHTML = '<div class="ver-empty">無法載入版本列表</div>';
+    }
+}
+async function saveVersion() {
+    const label = document.getElementById('ver-label-input').value.trim() || '未命名';
+    const btn = document.querySelector('.btn-ver-save');
+    btn.textContent = '儲存中...'; btn.disabled = true;
+    try {
+        await post('/api/versions/save', { label });
+        document.getElementById('ver-label-input').value = '';
+        await loadVersions();
+    } finally {
+        btn.textContent = '儲存現在版本'; btn.disabled = false;
+    }
+}
+async function restoreVersion(id, label) {
+    if (!confirm(`還原到「${label}」？\n目前的頁面將被覆蓋。`)) return;
+    try {
+        const r = await fetch('/api/versions/restore', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({id})
+        });
+        const d = await r.json();
+        if (d.status === 'ok') {
+            alert(`✅ 還原成功（${d.restored.join(', ')}）\n頁面即將重新整理`);
+            closeVerModal();
+            setTimeout(() => location.reload(), 800);
+        } else {
+            alert('還原失敗：' + (d.msg || '未知錯誤'));
+        }
+    } catch(e) {
+        alert('還原失敗，請確認伺服器狀態');
+    }
+}
+function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// 點選 modal 背景關閉
+document.getElementById('ver-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeVerModal();
+});
+
+// ── 溫度曲線圖 ──
+function initTempChart() {
+    const ctx = document.getElementById('temp-chart').getContext('2d');
+    tempChart = new Chart(ctx, {
+        data: {
+            datasets: [
+                {
+                    type: 'line',
+                    label: '溫度 (°C)',
+                    data: [],
+                    borderColor: '#f39c12',
+                    backgroundColor: 'rgba(243,156,18,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    yAxisID: 'yTemp',
+                },
+                {
+                    type: 'line',
+                    label: '功率 (%)',
+                    data: [],
+                    borderColor: '#e94560',
+                    backgroundColor: 'rgba(233,69,96,0.08)',
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.1,
+                    stepped: true,
+                    yAxisID: 'yPwr',
+                }
+            ]
+        },
+        options: {
+            animation: false,
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { labels: { color: '#eaeaea', font: { size: 11 } } } },
+            scales: {
+                x: { ticks: { color: '#7f8c8d', maxTicksLimit: 6, font: { size: 10 } }, grid: { color: '#0f3460' } },
+                yTemp: {
+                    position: 'left',
+                    min: 0, max: 110,
+                    ticks: { color: '#f39c12', font: { size: 10 } },
+                    grid: { color: '#0f3460' },
+                    title: { display: true, text: '°C', color: '#f39c12', font: { size: 10 } }
+                },
+                yPwr: {
+                    position: 'right',
+                    min: 0, max: 100,
+                    ticks: { color: '#e94560', font: { size: 10 } },
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: '%', color: '#e94560', font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+async function refreshTempChart() {
+    if (!tempChart) return;
+    try {
+        const r = await fetch('/api/temp_log');
+        const data = await r.json();
+        if (!data.length) return;
+        const t0 = data[0].ts;
+        const labels = data.map(d => {
+            const s = d.ts - t0;
+            return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+        });
+        tempChart.data.labels = labels;
+        tempChart.data.datasets[0].data = data.map(d => d.temp);
+        tempChart.data.datasets[1].data = data.map(d => d.pwr);
+        tempChart.update('none');
+    } catch(e) {}
+}
+
+async function clearTempLog() {
+    await fetch('/api/temp_log/clear', { method: 'POST' });
+    if (tempChart) {
+        tempChart.data.labels = [];
+        tempChart.data.datasets[0].data = [];
+        tempChart.data.datasets[1].data = [];
+        tempChart.update('none');
+    }
+}
+
+// ── 全畫面切換 ──
+function toggleFullscreen() {
+    const btn = document.getElementById('fab-fs');
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        btn.textContent = '✕';
+        btn.title = '退出全畫面';
+    } else {
+        document.exitFullscreen().catch(() => {});
+        btn.textContent = '⛶';
+        btn.title = '全畫面';
+    }
+}
+document.addEventListener('fullscreenchange', () => {
+    const btn = document.getElementById('fab-fs');
+    if (!document.fullscreenElement) {
+        btn.textContent = '⛶';
+        btn.title = '全畫面';
+    }
+});
+
+</script>
+
+<script src="/static/chart.min.js"></script>
+
+<!-- 全畫面切換按鈕 -->
+<div class="fab-fullscreen" id="fab-fs" onclick="toggleFullscreen()" title="全畫面切換">⛶</div>
+
+<!-- 版本控制浮動按鈕 -->
+<div class="fab-version" onclick="openVerModal()" title="版本管理">🕐</div>
+
+<!-- 版本管理 Modal -->
+<div id="ver-modal">
+    <div class="ver-sheet">
+        <h2>🕐 版本管理</h2>
+        <div class="ver-save-row">
+            <input type="text" id="ver-label-input" placeholder="版本名稱（如：加了計時器）" maxlength="40">
+            <button class="btn-ver-save" onclick="saveVersion()">儲存現在版本</button>
+        </div>
+        <div class="ver-list" id="ver-list">
+            <div class="ver-empty">載入中...</div>
+        </div>
+        <button class="btn-ver-close" onclick="closeVerModal()">關閉</button>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加熱計時器</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: sans-serif;
+            background: #121212;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px;
+        }
+
+        .topbar {
+            width: 100%; max-width: 480px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px;
+        }
+        .topbar h1 { font-size: 22px; color: #4caf50; }
+        .back-btn {
+            padding: 12px 20px; border-radius: 8px; background: #2a2a2a;
+            border: 1px solid #444; color: #aaa; font-size: 14px;
+            cursor: pointer; text-decoration: none; touch-action: manipulation; min-width: 80px; text-align: center;
+        }
+
+        /* 溫度大顯示 */
+        .temp-card {
+            width: 100%; max-width: 480px;
+            background: #1e1e1e;
+            border: 1px solid #333; border-radius: 16px;
+            padding: 20px; margin-bottom: 16px;
+            text-align: center;
+        }
+        .temp-label { font-size: 13px; color: #888; margin-bottom: 4px; }
+        .temp-big { font-size: 72px; font-weight: bold; line-height: 1; }
+        .temp-big.cold   { color: #42a5f5; }
+        .temp-big.warm   { color: #ffa726; }
+        .temp-big.hot    { color: #ef5350; }
+        .temp-big.done   { color: #4caf50; }
+        .temp-unit { font-size: 32px; color: #888; }
+        .temp-sub { font-size: 13px; color: #666; margin-top: 6px; }
+
+        /* 進度弧（SVG 圓弧） */
+        .arc-wrap { position: relative; width: 200px; height: 110px; margin: 0 auto 8px; overflow: hidden; }
+        .arc-wrap svg { position: absolute; top: 0; left: 0; }
+        .arc-label { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); font-size: 13px; color: #555; white-space: nowrap; }
+
+        /* 進度條 */
+        .progress-track {
+            width: 100%; background: #333;
+            border-radius: 20px; height: 22px; overflow: hidden; margin: 10px 0 4px;
+        }
+        #prog-bar {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #1565c0, #4caf50);
+            border-radius: 20px;
+            transition: width 1.5s ease;
+        }
+        .prog-labels { display: flex; justify-content: space-between; font-size: 12px; color: #666; }
+
+        /* 計時資訊列 */
+        .info-row {
+            display: flex; gap: 8px;
+            width: 100%; max-width: 480px; margin-bottom: 12px;
+        }
+        .info-box {
+            flex: 1; background: #1e1e1e; border: 1px solid #333;
+            border-radius: 12px; padding: 12px 8px; text-align: center;
+        }
+        .info-box .lbl { font-size: 11px; color: #888; margin-bottom: 4px; }
+        .info-box .val { font-size: 22px; font-weight: bold; }
+
+        /* 參數設定 */
+        .param-card {
+            width: 100%; max-width: 480px;
+            background: #1e1e1e; border: 1px solid #333;
+            border-radius: 16px; padding: 18px; margin-bottom: 16px;
+        }
+        .param-card h3 { font-size: 14px; color: #888; margin-bottom: 12px; }
+        .field { margin-bottom: 14px; }
+        .field label { display: block; font-size: 13px; color: #888; margin-bottom: 5px; }
+        .row-input { display: flex; align-items: center; gap: 10px; }
+        .row-input input[type=range] { flex: 1; accent-color: #4caf50; }
+        .val-box {
+            background: #2a2a2a; border: 1px solid #444;
+            border-radius: 8px; padding: 5px 10px;
+            font-size: 17px; font-weight: bold;
+            min-width: 60px; text-align: center;
+        }
+        .preset-row { display: flex; gap: 8px; }
+        .preset-btn {
+            flex: 1; padding: 10px 4px;
+            border: 1px solid #444; border-radius: 8px;
+            background: #2a2a2a; color: #ccc;
+            font-size: 12px; cursor: pointer;
+            transition: 0.2s; text-align: center;
+        }
+        .preset-btn.active { background: #1b4d1f; border-color: #4caf50; color: #4caf50; }
+
+        /* 控制按鈕 */
+        .ctrl-row {
+            display: flex; gap: 10px;
+            width: 100%; max-width: 480px; margin-bottom: 16px;
+        }
+        .ctrl-btn {
+            flex: 1; padding: 18px; font-size: 18px;
+            border: none; border-radius: 12px;
+            cursor: pointer; font-weight: bold; transition: 0.2s;
+        }
+        #btn-start { background: #4caf50; color: white; }
+        #btn-start:disabled { opacity: 0.35; cursor: not-allowed; }
+        #btn-pause { background: #ff9800; color: white; }
+        #btn-pause:disabled { opacity: 0.35; cursor: not-allowed; }
+        #btn-reset { background: #333; color: #aaa; }
+
+        /* 狀態訊息 */
+        #status-msg {
+            font-size: 16px; color: #888;
+            width: 100%; max-width: 480px;
+            text-align: center; min-height: 24px; margin-bottom: 8px;
+        }
+
+        /* 感測器故障警告 */
+        .sensor-warn {
+            width: 100%; max-width: 480px;
+            background: #3e1f1f; border: 1px solid #c62828;
+            border-radius: 10px; padding: 10px 14px;
+            color: #ef9a9a; font-size: 13px; margin-bottom: 12px;
+            display: none;
+        }
+
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .done-flash { animation: blink 0.7s infinite; }
+
+        /* 完成提示卡 */
+        .done-card {
+            width: 100%; max-width: 480px;
+            background: #1b3a1b; border: 2px solid #4caf50;
+            border-radius: 16px; padding: 24px;
+            text-align: center; margin-bottom: 16px; display: none;
+        }
+        .done-card .done-icon { font-size: 48px; margin-bottom: 8px; }
+        .done-card .done-text { font-size: 22px; font-weight: bold; color: #4caf50; }
+        .done-card .done-sub { font-size: 14px; color: #888; margin-top: 6px; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <h1>🌡️ 加熱計時器</h1>
+    <a class="back-btn" href="/" onclick="window.location.href='/';return false;">← 返回</a>
+</div>
+
+<!-- 感測器故障警告 -->
+<div class="sensor-warn" id="sensor-warn">
+    ⚠️ 溫度感測器無回應，顯示估算值
+</div>
+
+<!-- 完成提示 -->
+<div class="done-card" id="done-card">
+    <div class="done-icon">✅</div>
+    <div class="done-text">已達 100°C！</div>
+    <div class="done-sub" id="done-elapsed">加熱時間：--</div>
+</div>
+
+<!-- 即時溫度 -->
+<div class="temp-card">
+    <div class="temp-label">目前水溫</div>
+    <div class="temp-big cold" id="temp-display">--<span class="temp-unit">°C</span></div>
+    <div class="progress-track">
+        <div id="prog-bar"></div>
+    </div>
+    <div class="prog-labels">
+        <span id="prog-start">起始</span>
+        <span id="prog-end">100°C</span>
+    </div>
+    <div class="temp-sub" id="temp-sub">等待感測器...</div>
+</div>
+
+<!-- 計時資訊 -->
+<div class="info-row">
+    <div class="info-box">
+        <div class="lbl">已加熱</div>
+        <div class="val" id="elapsed-val">0:00</div>
+    </div>
+    <div class="info-box">
+        <div class="lbl">預估剩餘</div>
+        <div class="val" id="remain-val">--:--</div>
+    </div>
+    <div class="info-box">
+        <div class="lbl">升溫速率</div>
+        <div class="val" id="rate-val">--°/分</div>
+    </div>
+</div>
+
+<!-- 參數設定 -->
+<div class="param-card">
+    <h3>加熱參數</h3>
+    <div class="field">
+        <label>水量（用於估算時間）</label>
+        <div class="row-input">
+            <input type="range" id="slider-vol" min="0.5" max="10" step="0.5" value="2">
+            <div class="val-box"><span id="disp-vol">2.0</span> <small style="color:#888">L</small></div>
+        </div>
+    </div>
+    <div class="field">
+        <label>電磁爐功率</label>
+        <div class="preset-row" id="preset-row">
+            <div class="preset-btn" data-p="30">低<br><small>30%</small></div>
+            <div class="preset-btn active" data-p="60">中<br><small>60%</small></div>
+            <div class="preset-btn" data-p="80">高<br><small>80%</small></div>
+            <div class="preset-btn" data-p="100">全<br><small>100%</small></div>
+        </div>
+    </div>
+</div>
+
+<!-- 控制按鈕 -->
+<div class="ctrl-row">
+    <button class="ctrl-btn" id="btn-start" onclick="startHeat()">▶ 開始加熱</button>
+    <button class="ctrl-btn" id="btn-pause" onclick="pauseHeat()" disabled>⏸ 暫停</button>
+    <button class="ctrl-btn" id="btn-reset" onclick="resetAll()">↺ 重設</button>
+</div>
+<div id="status-msg">設定參數後按「開始加熱」</div>
+
+<script>
+// ── 狀態 ──
+let phase = 'idle';      // idle | heating | paused | done
+let elapsedSec = 0;
+let startTemp = null;
+let currentTemp = null;
+let selectedPwr = 60;
+let intervalId = null;
+let tempHistory = [];    // [{time, temp}] 計算升溫速率
+let pausedAtSec = 0;
+
+// ── 輔助 ──
+function fmtTime(s) {
+    s = Math.max(0, Math.round(s));
+    return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+
+function getTempColor(t) {
+    if (t === null) return 'cold';
+    if (t >= 100) return 'done';
+    if (t >= 70)  return 'hot';
+    if (t >= 40)  return 'warm';
+    return 'cold';
+}
+
+// 根據實際升溫速率估算剩餘時間
+function estimateRemain(currentT) {
+    if (tempHistory.length < 3) return null;
+    const oldest = tempHistory[0];
+    const newest = tempHistory[tempHistory.length - 1];
+    const dt = newest.time - oldest.time;
+    const dT = newest.temp - oldest.temp;
+    if (dt < 10 || dT <= 0) return null;
+    const ratePerSec = dT / dt;
+    const remain = (100 - currentT) / ratePerSec;
+    return remain;
+}
+
+// ── 輪詢感測器 ──
+function pollStatus() {
+    fetch('/api/status')
+    .then(r => r.json())
+    .then(data => {
+        const t = data.temp;
+        currentTemp = t;
+
+        const warn = document.getElementById('sensor-warn');
+        if (t === null || t === undefined) {
+            warn.style.display = 'block';
+            document.getElementById('temp-display').innerHTML = '--<span class="temp-unit">°C</span>';
+            document.getElementById('temp-sub').textContent = '感測器無回應';
+            return;
+        }
+        warn.style.display = 'none';
+
+        // 記錄溫度歷史（加熱中）
+        if (phase === 'heating') {
+            tempHistory.push({ time: elapsedSec, temp: t });
+            if (tempHistory.length > 30) tempHistory.shift();
+        }
+
+        // 顯示溫度
+        const colorCls = getTempColor(t);
+        const el = document.getElementById('temp-display');
+        el.className = `temp-big ${colorCls}`;
+        el.innerHTML = `${t.toFixed(1)}<span class="temp-unit">°C</span>`;
+
+        // 進度條
+        const base = startTemp !== null ? startTemp : t;
+        const pct = Math.min(100, Math.max(0, (t - base) / (100 - base) * 100));
+        document.getElementById('prog-bar').style.width = pct + '%';
+        document.getElementById('prog-start').textContent = `${base.toFixed(0)}°C`;
+
+        // 升溫速率
+        if (tempHistory.length >= 3) {
+            const span = tempHistory.length - 1;
+            const dT = tempHistory[span].temp - tempHistory[0].temp;
+            const dt = tempHistory[span].time - tempHistory[0].time;
+            const rate = dt > 0 ? (dT / dt * 60) : 0;
+            document.getElementById('rate-val').textContent =
+                rate > 0 ? `+${rate.toFixed(1)}°/分` : `${rate.toFixed(1)}°/分`;
+        }
+
+        // 預估剩餘
+        const remain = estimateRemain(t);
+        document.getElementById('remain-val').textContent =
+            remain !== null ? fmtTime(remain) : '計算中';
+
+        // 溫度備註
+        const pctLbl = (pct).toFixed(0);
+        document.getElementById('temp-sub').textContent =
+            phase === 'heating' ? `加熱進度 ${pctLbl}%` :
+            phase === 'paused'  ? '⏸ 已暫停' :
+            phase === 'done'    ? '✅ 完成！' : '等待開始';
+
+        // 100°C 達到
+        if (t >= 100 && phase === 'heating') {
+            doneReached();
+        }
+    })
+    .catch(() => {
+        document.getElementById('sensor-warn').style.display = 'block';
+    });
+}
+
+// ── 計時器 tick ──
+function tick() {
+    elapsedSec++;
+    document.getElementById('elapsed-val').textContent = fmtTime(elapsedSec);
+    pollStatus();
+}
+
+// ── 控制 ──
+function startHeat() {
+    if (phase === 'idle') {
+        startTemp = currentTemp;
+        tempHistory = [];
+    }
+    phase = 'heating';
+
+    // 設定電磁爐功率
+    fetch('/api/induction', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({power: selectedPwr})
+    });
+
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-pause').disabled = false;
+    document.getElementById('status-msg').textContent = `🔥 加熱中（電磁爐 ${selectedPwr}%）`;
+    intervalId = setInterval(tick, 1000);
+    pollStatus();
+}
+
+function pauseHeat() {
+    if (phase === 'heating') {
+        clearInterval(intervalId);
+        phase = 'paused';
+        // 電磁爐關
+        fetch('/api/induction', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({power: 0})
+        });
+        document.getElementById('btn-pause').textContent = '▶ 繼續';
+        document.getElementById('btn-start').textContent = '▶ 繼續';
+        document.getElementById('btn-start').disabled = false;
+        document.getElementById('status-msg').textContent = '⏸ 已暫停，電磁爐關閉';
+    } else if (phase === 'paused') {
+        startHeat();
+        document.getElementById('btn-pause').textContent = '⏸ 暫停';
+    }
+}
+
+function resetAll() {
+    clearInterval(intervalId);
+    phase = 'idle';
+    elapsedSec = 0;
+    startTemp = null;
+    tempHistory = [];
+    // 電磁爐關
+    fetch('/api/induction', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({power: 0})
+    });
+    document.getElementById('btn-start').textContent = '▶ 開始加熱';
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('btn-pause').textContent = '⏸ 暫停';
+    document.getElementById('btn-pause').disabled = true;
+    document.getElementById('elapsed-val').textContent = '0:00';
+    document.getElementById('remain-val').textContent = '--:--';
+    document.getElementById('rate-val').textContent = '--°/分';
+    document.getElementById('prog-bar').style.width = '0%';
+    document.getElementById('status-msg').textContent = '設定參數後按「開始加熱」';
+    document.getElementById('done-card').style.display = 'none';
+    pollStatus();
+}
+
+function doneReached() {
+    clearInterval(intervalId);
+    phase = 'done';
+    // 電磁爐關或保溫
+    fetch('/api/induction', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({power: 0})
+    });
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-pause').disabled = true;
+    document.getElementById('done-card').style.display = 'block';
+    document.getElementById('done-elapsed').textContent = `加熱時間：${fmtTime(elapsedSec)}`;
+    document.getElementById('done-card').classList.add('done-flash');
+    document.getElementById('status-msg').textContent = '✅ 已沸騰！電磁爐已關閉';
+}
+
+// ── 滑桿 ──
+document.getElementById('slider-vol').addEventListener('input', function() {
+    document.getElementById('disp-vol').textContent = parseFloat(this.value).toFixed(1);
+});
+
+// ── 功率預設 ──
+document.getElementById('preset-row').querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (phase === 'heating') return; // 加熱中鎖定
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedPwr = parseInt(btn.dataset.p);
+    });
+});
+
+// 啟動輪詢
+pollStatus();
+setInterval(pollStatus, 3000); // 閒置時每 3 秒更新溫度
+</script>
+</body>
+</html>
