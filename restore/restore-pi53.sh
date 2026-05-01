@@ -57,6 +57,13 @@ for repo in luwei-accounting menu-dashboard raspi-system; do
   git clone "${PUBLIC}/${repo}.git" 2>&1 | tail -1 && ok "$repo"
 done
 
+# infra repo: GitHub 名稱是 pi53-infra，本機目錄名是 infra
+if [ ! -d "infra" ]; then
+  git clone "${PRIVATE}/pi53-infra.git" infra 2>&1 | tail -1 && ok "infra (pi53-infra)"
+else
+  warn "infra 已存在，跳過"
+fi
+
 # ── 建立目錄結構 ───────────────────────────────────────────
 step "4/9 建立目錄結構"
 mkdir -p ~/dashboard/{current,staging_dir,incoming,logs,bin,_prod_backup,_work}
@@ -99,39 +106,19 @@ for dir in dashboard-v2 luwei-manager luwei-accounting; do
 done
 
 # ── Systemd Services ───────────────────────────────────────
-step "7/9 建立 Systemd Services"
+step "7/9 建立 Systemd Services（從 infra repo）"
 USER=$(whoami)
 
-create_service() {
-  local name="$1" desc="$2" dir="$3" cmd="$4"
-  sudo tee /etc/systemd/system/${name}.service > /dev/null << EOF
-[Unit]
-Description=${desc}
-After=network.target
-
-[Service]
-User=${USER}
-WorkingDirectory=${dir}
-ExecStart=${cmd}
-Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  sudo systemctl enable "$name" 2>/dev/null
-  ok "$name service 建立完成"
-}
-
-create_service "dashboard-v2"    "Dashboard V2 (tong)"        "/home/${USER}/dashboard-v2"    "/usr/bin/python3 app.py"
-create_service "luwei-manager"   "Luwei Manager POS"          "/home/${USER}/luwei-manager"   "/usr/bin/python3 run.py"
-create_service "luwei-accounting" "Luwei Accounting System"   "/home/${USER}/luwei-accounting" "/usr/bin/python3 app.py"
-
-# 設定 luwei-accounting DB 路徑
-sudo sed -i "s|ExecStart=/usr/bin/python3 app.py|ExecStart=/usr/bin/python3 app.py\nEnvironment=DB_PATH=/home/${USER}/accounting/data/accounting.db|" \
-  /etc/systemd/system/luwei-accounting.service 2>/dev/null || true
+if [ -d ~/infra/systemd ] && ls ~/infra/systemd/*.service >/dev/null 2>&1; then
+  for svc in ~/infra/systemd/*.service; do
+    sudo cp "$svc" /etc/systemd/system/
+    name=$(basename "$svc" .service)
+    sudo systemctl enable "$name" 2>/dev/null
+    ok "$name service 安裝完成"
+  done
+else
+  err "找不到 ~/infra/systemd/，請先 clone pi53-infra repo"
+fi
 
 sudo systemctl daemon-reload
 sudo systemctl start dashboard-v2 luwei-manager luwei-accounting
@@ -179,17 +166,28 @@ print(json.dumps({'AccountTag': d['a'], 'TunnelSecret': d['s'], 'TunnelID': d['t
 " | sudo tee /etc/cloudflared/${TUNNEL_ID}.json > /dev/null
     sudo chmod 644 /etc/cloudflared/${TUNNEL_ID}.json
 
-    sudo tee /etc/cloudflared/config.yml > /dev/null << EOF
+    # 從 infra repo 套用 ingress 設定（hostname / service mapping）
+    if [ -f ~/infra/cloudflared/config.yml ]; then
+      sudo cp ~/infra/cloudflared/config.yml /etc/cloudflared/config.yml
+      # 用實際 tunnel id 取代 infra 裡的 tunnel id（以防 token 對到不同 tunnel）
+      sudo sed -i "s|^tunnel:.*|tunnel: ${TUNNEL_ID}|" /etc/cloudflared/config.yml
+      sudo sed -i "s|^credentials-file:.*|credentials-file: /etc/cloudflared/${TUNNEL_ID}.json|" /etc/cloudflared/config.yml
+    else
+      warn "找不到 ~/infra/cloudflared/config.yml，使用 fallback ingress"
+      sudo tee /etc/cloudflared/config.yml > /dev/null << EOF
 tunnel: ${TUNNEL_ID}
 credentials-file: /etc/cloudflared/${TUNNEL_ID}.json
 
 ingress:
+  - hostname: pos.tfooddata.com
+    service: http://localhost:5011
   - hostname: tong.tfooddata.com
     service: http://localhost:5010
   - hostname: dashboard.tfooddata.com
     service: http://localhost:8501
   - service: http_status:404
 EOF
+    fi
 
     sudo docker stop cloudflared 2>/dev/null || true
     sudo docker rm cloudflared 2>/dev/null || true
@@ -221,24 +219,12 @@ done
 ok "GitHub 認證設定完成"
 
 # ── Crontab ────────────────────────────────────────────────
-cat > /tmp/pi53_crontab << 'CRONEOF'
-# luwei-accounting 每天 00:00 auto-backup
-0 0 * * * cd ~/luwei-accounting && git add -A && git diff --cached --quiet || (git commit -m "auto-backup $(date +'%Y-%m-%d %H:%M')" && git push origin main) >> ~/logs/backup.log 2>&1
-
-# menu-dashboard 每小時 auto-backup
-0 * * * * cd ~/menu-dashboard && git add -A && git diff --cached --quiet || (git commit -m "auto-backup $(date +'%Y-%m-%d %H:%M')" && git push origin main) >> ~/logs/backup.log 2>&1
-
-# dashboard-v2 每天 00:30 auto-backup
-30 0 * * * cd ~/dashboard-v2 && git add -A && git diff --cached --quiet || (git commit -m "auto-backup $(date +'%Y-%m-%d %H:%M')" && git push origin main) >> ~/logs/backup.log 2>&1
-
-# DB 每天 01:00 dump 到 pi-backups（所有 DB 一次備份）
-0 1 * * * bash ~/raspi-system/scripts/backup_dbs.sh >> ~/logs/backup.log 2>&1
-
-# pi52 rsync DB 備份
-15 1 * * * mkdir -p ~/db_backups && rsync -av ~/db_backups/ pi52@100.98.225.85:/home/pi52/db_backups/ >> ~/logs/backup.log 2>&1
-CRONEOF
-crontab /tmp/pi53_crontab
-ok "Crontab 設定完成"
+if [ -f ~/infra/crontab.txt ]; then
+  crontab ~/infra/crontab.txt
+  ok "Crontab 從 ~/infra/crontab.txt 套用完成"
+else
+  warn "找不到 ~/infra/crontab.txt — 跳過 cron 設定，請手動 crontab -e"
+fi
 
 # ── 完成 ───────────────────────────────────────────────────
 echo ""
