@@ -1052,6 +1052,69 @@ def print_receipt():
     buf += bytes([0x1B, 0x64, 0x05])
     buf += bytes([0x1D, 0x56, 0x41, 0x00])
 
+    # ── 號碼牌取號單（第二張）──
+    def _make_ticket_buf():
+        f_t_brand = ImageFont.truetype(FONT_BOLD, 72, index=0)
+        f_t_label = ImageFont.truetype(FONT_BOLD, 44, index=0)
+        f_t_num   = ImageFont.truetype(FONT_BOLD, 160, index=0)
+        f_t_info  = ImageFont.truetype(FONT_BOLD, 38, index=0)
+
+        trows = []
+        def tadd(text, font, align='center', mt=0):
+            trows.append((text, font, align, mt))
+        def tsep():
+            tadd('- ' * 22, f_t_info, 'left', 6)
+
+        tadd('桶江軍', f_t_brand, 'center', 20)
+        tadd('顧客號碼', f_t_label, 'center', 8)
+        tsep()
+        tadd(f'#{queue_number}' if queue_number else '#--', f_t_num, 'center', 10)
+        tsep()
+        tadd(f'訂單  {order_number}', f_t_info, 'left', 6)
+        tadd(f'時間  {created_at}', f_t_info, 'left', 4)
+        tadd('', f_t_info, 'left', 32)
+
+        th = 0
+        for text, font, align, mt in trows:
+            th += mt
+            bb = font.getbbox(text)
+            th += (bb[3] - bb[1]) + 10
+
+        timg = Image.new('L', (PAPER_W, th), 255)
+        tdraw = ImageDraw.Draw(timg)
+        y = 0
+        for text, font, align, mt in trows:
+            y += mt
+            bb = font.getbbox(text)
+            w_t = bb[2] - bb[0]
+            h_t = bb[3] - bb[1]
+            x = (PAPER_W - w_t) // 2 if align == 'center' else (PAPER_W - w_t - 20 if align == 'right' else 20)
+            tdraw.text((x, y), text, font=font, fill=0)
+            y += h_t + 10
+
+        timg1 = timg.point(lambda p: 0 if p < 180 else 255, '1')
+        tpix = timg1.load()
+        byte_w2 = (PAPER_W + 7) // 8
+        tbuf = bytearray()
+        tbuf += bytes([0x1B, 0x40])
+        tbuf += bytes([0x1D, 0x76, 0x30, 0x00,
+                       byte_w2 & 0xFF, (byte_w2 >> 8) & 0xFF,
+                       th & 0xFF, (th >> 8) & 0xFF])
+        for row in range(th):
+            for cb in range(byte_w2):
+                bv = 0
+                for bit in range(8):
+                    col = cb * 8 + bit
+                    if col < PAPER_W and tpix[col, row] == 0:
+                        bv |= (0x80 >> bit)
+                tbuf.append(bv)
+        tbuf += bytes([0x1B, 0x64, 0x05])
+        tbuf += bytes([0x1D, 0x56, 0x41, 0x00])
+        return tbuf
+
+    if queue_number:
+        buf += _make_ticket_buf()
+
     try:
         s = _sock.create_connection((PRINT_HOST, PRINT_PORT), timeout=5)
         s.sendall(bytes(buf))
