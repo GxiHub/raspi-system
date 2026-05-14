@@ -905,6 +905,8 @@ def print_receipt():
     cash_received = float(data.get('cash_received') or 0)
     change        = float(data.get('change_amount') or 0)
     note          = data.get('note') or ''
+    spec_text     = data.get('spec_text') or ''
+    user_note_txt = data.get('user_note') or ''
     queue_number  = data.get('queue_number')
     items         = data.get('items', [])
     PAY_LABEL     = {'cash': '現金', 'linepay': 'LINE Pay', 'jkopay': '街口支付'}
@@ -945,10 +947,18 @@ def print_receipt():
     if payment == 'cash' and cash_received:
         add(f'收款  ${cash_received:.0f}', f_normal, 'left', 4)
         add(f'找零  ${change:.0f}', f_normal, 'left', 4)
-    if note:
+    if spec_text or user_note_txt or note:
         sep()
-        for part in textwrap.wrap(note, width=14):
-            add(part, f_small, 'left', 4)
+        if spec_text:
+            add('【口味】', f_large, 'center', 4)
+            for part in textwrap.wrap(spec_text, width=12):
+                add(part, f_normal, 'center', 2)
+        if user_note_txt:
+            for part in textwrap.wrap(user_note_txt, width=14):
+                add(part, f_small, 'center', 4)
+        if note and not spec_text and not user_note_txt:
+            for part in textwrap.wrap(note, width=12):
+                add(part, f_normal, 'center', 4)
     add('', f_normal, 'left', 28)
 
     # ── 計算總高 ──
