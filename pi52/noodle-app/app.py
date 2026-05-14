@@ -994,10 +994,10 @@ def print_receipt():
         qty  = it.get('quantity', 1)
         sub  = float(it.get('subtotal') or 0)
         dlbl = (it.get('discount_label') or '').strip()
-        add(f'{name} x{qty}', f_normal, 'left', 8)
+        # 名稱與金額同行：('__lr__', 左文, 右文, font, margin_top)
+        rows.append(('__lr__', f'{name} x{qty}', f'${sub:.0f}', f_normal, 8))
         if dlbl:
             add(f'  ({dlbl})', f_disc, 'left', 0)
-        add(f'${sub:.0f}', f_normal, 'right', 0)
     sep()
     add(f'合計  ${total:.0f}', f_large, 'right', 10)
     add(f'付款  {pay_str}', f_normal, 'left', 8)
@@ -1013,23 +1013,42 @@ def print_receipt():
 
     # ── 計算總高 ──
     total_h = 0
-    for text, font, align, mt in rows:
-        total_h += mt
-        bb = font.getbbox(text)
-        total_h += (bb[3] - bb[1]) + 10
+    for row in rows:
+        if row[0] == '__lr__':
+            _, ltxt, rtxt, font, mt = row
+            total_h += mt
+            bb = font.getbbox(ltxt)
+            total_h += (bb[3] - bb[1]) + 10
+        else:
+            text, font, align, mt = row
+            total_h += mt
+            bb = font.getbbox(text)
+            total_h += (bb[3] - bb[1]) + 10
 
     # ── 灰階渲染 → 1-bit ──
     img = Image.new('L', (PAPER_W, total_h), 255)
     draw = ImageDraw.Draw(img)
     y = 0
-    for text, font, align, mt in rows:
-        y += mt
-        bb   = font.getbbox(text)
-        w_t  = bb[2] - bb[0]
-        h_t  = bb[3] - bb[1]
-        x = (PAPER_W - w_t) // 2 if align == 'center' else (PAPER_W - w_t - 20 if align == 'right' else 20)
-        draw.text((x, y), text, font=font, fill=0)
-        y += h_t + 10
+    for row in rows:
+        if row[0] == '__lr__':
+            _, ltxt, rtxt, font, mt = row
+            y += mt
+            bb  = font.getbbox(ltxt)
+            h_t = bb[3] - bb[1]
+            draw.text((20, y), ltxt, font=font, fill=0)
+            rb  = font.getbbox(rtxt)
+            rw  = rb[2] - rb[0]
+            draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
+            y += h_t + 10
+        else:
+            text, font, align, mt = row
+            y += mt
+            bb   = font.getbbox(text)
+            w_t  = bb[2] - bb[0]
+            h_t  = bb[3] - bb[1]
+            x = (PAPER_W - w_t) // 2 if align == 'center' else (PAPER_W - w_t - 20 if align == 'right' else 20)
+            draw.text((x, y), text, font=font, fill=0)
+            y += h_t + 10
 
     img1 = img.point(lambda p: 0 if p < 180 else 255, '1')
     pixels = img1.load()
