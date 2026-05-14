@@ -890,7 +890,8 @@ def print_receipt():
     # 透過 proxy.py 的現有 printer 連線送資料，避免多重 TCP 連線到印表機
     PRINT_HOST   = '127.0.0.1'
     PRINT_PORT   = 9200
-    FONT_PATH    = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+    FONT_BOLD    = '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+    FONT_REGULAR = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
     PAPER_W      = 576
 
     try:
@@ -904,20 +905,30 @@ def print_receipt():
     total         = float(data.get('total_amount') or 0)
     cash_received = float(data.get('cash_received') or 0)
     change        = float(data.get('change_amount') or 0)
-    note          = data.get('note') or ''
-    spec_text     = data.get('spec_text') or ''
-    user_note_txt = data.get('user_note') or ''
     queue_number  = data.get('queue_number')
     items         = data.get('items', [])
+    # 結構化欄位（pi53 新版送來），舊版回退到 note 解析
+    spec_text     = (data.get('spec_text') or '').strip()
+    user_note     = (data.get('user_note') or '').strip()
+    if not spec_text and not user_note:
+        legacy_note = (data.get('note') or '').strip()
+        if '｜' in legacy_note:
+            head, _, tail = legacy_note.partition('｜')
+            spec_text, user_note = head.strip(), tail.strip()
+        else:
+            user_note = legacy_note
     PAY_LABEL     = {'cash': '現金', 'linepay': 'LINE Pay', 'jkopay': '街口支付'}
     pay_str       = PAY_LABEL.get(payment, payment)
 
     try:
-        f_title  = ImageFont.truetype(FONT_PATH, 72, index=0)
-        f_sub    = ImageFont.truetype(FONT_PATH, 38, index=0)
-        f_large  = ImageFont.truetype(FONT_PATH, 34, index=0)
-        f_normal = ImageFont.truetype(FONT_PATH, 30, index=0)
-        f_small  = ImageFont.truetype(FONT_PATH, 26, index=0)
+        f_title  = ImageFont.truetype(FONT_BOLD, 96, index=0)   # 滷味
+        f_sub    = ImageFont.truetype(FONT_BOLD, 48, index=0)   # 收銀收據
+        f_queue  = ImageFont.truetype(FONT_BOLD, 76, index=0)   # 號碼牌（最醒目）
+        f_spec   = ImageFont.truetype(FONT_BOLD, 62, index=0)   # 口味（廚房要看得清楚）
+        f_large  = ImageFont.truetype(FONT_BOLD, 54, index=0)   # 合計
+        f_normal = ImageFont.truetype(FONT_BOLD, 44, index=0)   # 品項、訂單、付款、找零
+        f_small  = ImageFont.truetype(FONT_BOLD, 38, index=0)   # 時間、備註、分隔線
+        f_disc   = ImageFont.truetype(FONT_BOLD, 36, index=0)   # 折扣標籤
     except Exception as e:
         return jsonify({'ok': False, 'error': f'font: {e}'}), 500
 
@@ -925,41 +936,80 @@ def print_receipt():
     def add(text, font, align='left', mt=0):
         rows.append((text, font, align, mt))
     def sep():
-        add('- ' * 22, f_small, 'left', 4)
+        add('- ' * 22, f_small, 'left', 6)
+
+    def _w(s, font):
+        return font.getbbox(s)[2] - font.getbbox(s)[0]
+
+    def wrap_to_fit(text, font, max_w):
+        """把長字串依字寬換行；若有空格，優先在空格處斷行（保留詞組完整）。"""
+        if not text:
+            return [text]
+        out, line = [], ''
+        # 先按空格切詞組；單一詞組超寬再退回逐字斷
+        tokens = text.split(' ')
+        for i, tok in enumerate(tokens):
+            sep = '' if not line else ' '
+            cand = line + sep + tok
+            if _w(cand, font) <= max_w:
+                line = cand
+                continue
+            # 加入後超寬：先把現有 line 收掉
+            if line:
+                out.append(line)
+                line = ''
+            # 詞組本身超寬 → 逐字斷
+            if _w(tok, font) > max_w:
+                cur = ''
+                for ch in tok:
+                    if _w(cur + ch, font) > max_w and cur:
+                        out.append(cur)
+                        cur = ch
+                    else:
+                        cur += ch
+                line = cur
+            else:
+                line = tok
+        if line:
+            out.append(line)
+        return out
 
     add('滷味', f_title, 'center', 16)
-    add('收銀收據', f_sub, 'center', 6)
+    add('收銀收據', f_sub, 'center', 8)
     sep()
     add(f'訂單  {order_number}', f_normal, 'left', 8)
     if queue_number:
-        add(f'號碼牌  #{queue_number}', f_large, 'left', 4)
-    add(f'時間  {created_at}', f_small, 'left', 4)
+        add(f'號碼牌  #{queue_number}', f_queue, 'left', 8)
+    add(f'時間  {created_at}', f_small, 'left', 6)
+    _src = '手機點餐' if str(order_number).startswith('C') else 'POS 收銀'
+    add(f'來源  {_src}', f_small, 'left', 4)
+    if spec_text:
+        sep()
+        add('【口味】', f_spec, 'center', 4)
+        for line in wrap_to_fit(spec_text, f_spec, PAPER_W - 40):
+            add(line, f_spec, 'left', 4)
     sep()
     for it in items:
         name = it.get('product_name', '')
         qty  = it.get('quantity', 1)
         sub  = float(it.get('subtotal') or 0)
+        dlbl = (it.get('discount_label') or '').strip()
         add(f'{name} x{qty}', f_normal, 'left', 8)
+        if dlbl:
+            add(f'  ({dlbl})', f_disc, 'left', 0)
         add(f'${sub:.0f}', f_normal, 'right', 0)
     sep()
-    add(f'合計  ${total:.0f}', f_large, 'right', 8)
+    add(f'合計  ${total:.0f}', f_large, 'right', 10)
     add(f'付款  {pay_str}', f_normal, 'left', 8)
     if payment == 'cash' and cash_received:
         add(f'收款  ${cash_received:.0f}', f_normal, 'left', 4)
         add(f'找零  ${change:.0f}', f_normal, 'left', 4)
-    if spec_text or user_note_txt or note:
+    if user_note:
         sep()
-        if spec_text:
-            add('【口味】', f_large, 'center', 4)
-            for part in textwrap.wrap(spec_text, width=12):
-                add(part, f_normal, 'center', 2)
-        if user_note_txt:
-            for part in textwrap.wrap(user_note_txt, width=14):
-                add(part, f_small, 'center', 4)
-        if note and not spec_text and not user_note_txt:
-            for part in textwrap.wrap(note, width=12):
-                add(part, f_normal, 'center', 4)
-    add('', f_normal, 'left', 28)
+        add('備註', f_small, 'center', 4)
+        for part in wrap_to_fit(user_note, f_small, PAPER_W - 40):
+            add(part, f_small, 'center', 4)
+    add('', f_normal, 'left', 32)
 
     # ── 計算總高 ──
     total_h = 0
