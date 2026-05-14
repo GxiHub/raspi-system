@@ -986,8 +986,10 @@ def print_receipt():
     if spec_text:
         sep()
         add('【口味】', f_spec, 'center', 4)
-        for line in wrap_to_fit(spec_text, f_spec, PAPER_W - 40):
-            add(line, f_spec, 'left', 4)
+        for raw_line in spec_text.split('\n'):
+            for part in wrap_to_fit(raw_line.strip(), f_spec, PAPER_W - 40):
+                if part:
+                    add(part, f_spec, 'left', 4)
     sep()
     for it in items:
         name = it.get('product_name', '')
@@ -1007,8 +1009,10 @@ def print_receipt():
     if user_note:
         sep()
         add('備註', f_small, 'center', 4)
-        for part in wrap_to_fit(user_note, f_small, PAPER_W - 40):
-            add(part, f_small, 'center', 4)
+        for raw_line in user_note.split('\n'):
+            for part in wrap_to_fit(raw_line.strip(), f_small, PAPER_W - 40):
+                if part:
+                    add(part, f_small, 'center', 4)
     add('', f_normal, 'left', 32)
 
     # ── 計算總高 ──
