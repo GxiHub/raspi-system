@@ -1012,7 +1012,7 @@ def print_receipt():
         for raw_line in user_note.split('\n'):
             for part in wrap_to_fit(raw_line.strip(), f_small, PAPER_W - 40):
                 if part:
-                    add(part, f_small, 'center', 4)
+                    add(part, f_small, 'left', 4)
     add('', f_normal, 'left', 32)
 
     # ── 計算總高 ──
@@ -1020,9 +1020,16 @@ def print_receipt():
     for row in rows:
         if row[0] == '__lr__':
             _, ltxt, rtxt, font, mt = row
+            rb = font.getbbox(rtxt); rw = rb[2] - rb[0]
+            name_max_w = PAPER_W - rw - 48  # 左右各20 + 間距8
             total_h += mt
-            bb = font.getbbox(ltxt)
-            total_h += (bb[3] - bb[1]) + 10
+            if _w(ltxt, font) <= name_max_w:
+                bb = font.getbbox(ltxt)
+                total_h += (bb[3] - bb[1]) + 10
+            else:
+                for nl in wrap_to_fit(ltxt, font, PAPER_W - 40):
+                    bb = font.getbbox(nl)
+                    total_h += (bb[3] - bb[1]) + 10
         else:
             text, font, align, mt = row
             total_h += mt
@@ -1037,13 +1044,21 @@ def print_receipt():
         if row[0] == '__lr__':
             _, ltxt, rtxt, font, mt = row
             y += mt
-            bb  = font.getbbox(ltxt)
-            h_t = bb[3] - bb[1]
-            draw.text((20, y), ltxt, font=font, fill=0)
-            rb  = font.getbbox(rtxt)
-            rw  = rb[2] - rb[0]
-            draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
-            y += h_t + 10
+            rb  = font.getbbox(rtxt); rw = rb[2] - rb[0]
+            name_max_w = PAPER_W - rw - 48
+            if _w(ltxt, font) <= name_max_w:
+                bb = font.getbbox(ltxt); h_t = bb[3] - bb[1]
+                draw.text((20, y), ltxt, font=font, fill=0)
+                draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
+                y += h_t + 10
+            else:
+                name_lines = wrap_to_fit(ltxt, font, PAPER_W - 40)
+                for i, nl in enumerate(name_lines):
+                    bb = font.getbbox(nl); h_t = bb[3] - bb[1]
+                    draw.text((20, y), nl, font=font, fill=0)
+                    if i == len(name_lines) - 1:
+                        draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
+                    y += h_t + 10
         else:
             text, font, align, mt = row
             y += mt
