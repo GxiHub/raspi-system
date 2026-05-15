@@ -908,6 +908,8 @@ def print_receipt():
     queue_number    = data.get('queue_number')
     customer_phone  = (data.get('customer_phone') or '').strip()
     order_status    = data.get('status', 'completed')
+    is_reservation  = bool(data.get('is_reservation'))
+    pickup_time     = (data.get('pickup_time') or '').strip()
     items           = data.get('items', [])
     # 結構化欄位（pi53 新版送來），舊版回退到 note 解析
     spec_text     = (data.get('spec_text') or '').strip()
@@ -987,6 +989,8 @@ def print_receipt():
     add(f'來源  {_src}', f_small, 'left', 4)
     if customer_phone:
         add(f'電話  {customer_phone}', f_small, 'left', 4)
+    if is_reservation and pickup_time:
+        add(f'預約  {pickup_time}', f_small, 'left', 4)
     if spec_text:
         sep()
         add('【口味】', f_spec, 'center', 4)
