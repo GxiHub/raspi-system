@@ -933,6 +933,7 @@ def print_receipt():
         f_normal = ImageFont.truetype(FONT_BOLD, 44, index=0)   # 品項、訂單、付款、找零
         f_small  = ImageFont.truetype(FONT_BOLD, 38, index=0)   # 時間、備註、分隔線
         f_disc   = ImageFont.truetype(FONT_BOLD, 36, index=0)   # 折扣標籤
+        f_item   = ImageFont.truetype(FONT_BOLD, 35, index=0)   # 品項名稱與金額
     except Exception as e:
         return jsonify({'ok': False, 'error': f'font: {e}'}), 500
 
@@ -1005,7 +1006,7 @@ def print_receipt():
         sub  = float(it.get('subtotal') or 0)
         dlbl = (it.get('discount_label') or '').strip()
         # 名稱與金額同行：('__lr__', 左文, 右文, font, margin_top)
-        rows.append(('__lr__', f'{name} x{qty}', f'${sub:.0f}', f_normal, 8))
+        rows.append(('__lr__', f'{name} x{qty}', f'${sub:.0f}', f_item, 8))
         if dlbl:
             add(f'  ({dlbl})', f_disc, 'left', 0)
     sep()
