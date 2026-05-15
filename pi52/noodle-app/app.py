@@ -905,8 +905,10 @@ def print_receipt():
     total         = float(data.get('total_amount') or 0)
     cash_received = float(data.get('cash_received') or 0)
     change        = float(data.get('change_amount') or 0)
-    queue_number  = data.get('queue_number')
-    items         = data.get('items', [])
+    queue_number    = data.get('queue_number')
+    customer_phone  = (data.get('customer_phone') or '').strip()
+    order_status    = data.get('status', 'completed')
+    items           = data.get('items', [])
     # 結構化欄位（pi53 新版送來），舊版回退到 note 解析
     spec_text     = (data.get('spec_text') or '').strip()
     user_note     = (data.get('user_note') or '').strip()
@@ -983,6 +985,8 @@ def print_receipt():
     add(f'時間  {created_at}', f_small, 'left', 6)
     _src = '手機點餐' if str(order_number).startswith('C') else 'POS 收銀'
     add(f'來源  {_src}', f_small, 'left', 4)
+    if customer_phone:
+        add(f'電話  {customer_phone}', f_small, 'left', 4)
     if spec_text:
         sep()
         add('【口味】', f_spec, 'center', 4)
@@ -1002,10 +1006,13 @@ def print_receipt():
             add(f'  ({dlbl})', f_disc, 'left', 0)
     sep()
     add(f'合計  ${total:.0f}', f_large, 'right', 10)
-    add(f'付款  {pay_str}', f_normal, 'left', 8)
-    if payment == 'cash' and cash_received:
-        add(f'收款  ${cash_received:.0f}', f_normal, 'left', 4)
-        add(f'找零  ${change:.0f}', f_normal, 'left', 4)
+    if order_status in ('pending', 'confirmed'):
+        add('未結帳', f_normal, 'left', 8)
+    else:
+        add(f'已結帳  {pay_str}', f_normal, 'left', 8)
+        if payment == 'cash' and cash_received:
+            add(f'收款  ${cash_received:.0f}', f_normal, 'left', 4)
+            add(f'找零  ${change:.0f}', f_normal, 'left', 4)
     if user_note:
         sep()
         add('備註', f_small, 'center', 4)
