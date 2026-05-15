@@ -1038,7 +1038,7 @@ def print_receipt():
                 bb = font.getbbox(ltxt)
                 total_h += (bb[3] - bb[1]) + 10
             else:
-                for nl in wrap_to_fit(ltxt, font, PAPER_W - 40):
+                for nl in wrap_to_fit(ltxt, font, name_max_w):
                     bb = font.getbbox(nl)
                     total_h += (bb[3] - bb[1]) + 10
         else:
@@ -1063,7 +1063,7 @@ def print_receipt():
                 draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
                 y += h_t + 10
             else:
-                name_lines = wrap_to_fit(ltxt, font, PAPER_W - 40)
+                name_lines = wrap_to_fit(ltxt, font, name_max_w)
                 for i, nl in enumerate(name_lines):
                     bb = font.getbbox(nl); h_t = bb[3] - bb[1]
                     draw.text((20, y), nl, font=font, fill=0)
