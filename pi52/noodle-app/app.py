@@ -890,7 +890,8 @@ def print_receipt():
     # 透過 proxy.py 的現有 printer 連線送資料，避免多重 TCP 連線到印表機
     PRINT_HOST   = '127.0.0.1'
     PRINT_PORT   = 9200
-    FONT_PATH    = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+    FONT_BOLD    = '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+    FONT_REGULAR = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
     PAPER_W      = 576
 
     try:
@@ -902,20 +903,39 @@ def print_receipt():
     created_at    = data.get('created_at', '')
     payment       = data.get('payment_method', '')
     total         = float(data.get('total_amount') or 0)
+    original_total = float(data.get('original_total') or 0)
+    redeem_amount  = round(original_total - total) if original_total > total else 0
     cash_received = float(data.get('cash_received') or 0)
     change        = float(data.get('change_amount') or 0)
-    note          = data.get('note') or ''
-    queue_number  = data.get('queue_number')
-    items         = data.get('items', [])
+    queue_number    = data.get('queue_number')
+    customer_phone  = (data.get('customer_phone') or '').strip()
+    order_status    = data.get('status', 'completed')
+    is_reservation  = bool(data.get('is_reservation'))
+    pickup_time     = (data.get('pickup_time') or '').strip()
+    items           = data.get('items', [])
+    # 結構化欄位（pi53 新版送來），舊版回退到 note 解析
+    spec_text     = (data.get('spec_text') or '').strip()
+    user_note     = (data.get('user_note') or '').strip()
+    if not spec_text and not user_note:
+        legacy_note = (data.get('note') or '').strip()
+        if '｜' in legacy_note:
+            head, _, tail = legacy_note.partition('｜')
+            spec_text, user_note = head.strip(), tail.strip()
+        else:
+            user_note = legacy_note
     PAY_LABEL     = {'cash': '現金', 'linepay': 'LINE Pay', 'jkopay': '街口支付'}
     pay_str       = PAY_LABEL.get(payment, payment)
 
     try:
-        f_title  = ImageFont.truetype(FONT_PATH, 72, index=0)
-        f_sub    = ImageFont.truetype(FONT_PATH, 38, index=0)
-        f_large  = ImageFont.truetype(FONT_PATH, 34, index=0)
-        f_normal = ImageFont.truetype(FONT_PATH, 30, index=0)
-        f_small  = ImageFont.truetype(FONT_PATH, 26, index=0)
+        f_title  = ImageFont.truetype(FONT_BOLD, 96, index=0)   # 滷味
+        f_sub    = ImageFont.truetype(FONT_BOLD, 48, index=0)   # 收銀收據
+        f_queue  = ImageFont.truetype(FONT_BOLD, 76, index=0)   # 號碼牌（最醒目）
+        f_spec   = ImageFont.truetype(FONT_BOLD, 62, index=0)   # 口味（廚房要看得清楚）
+        f_large  = ImageFont.truetype(FONT_BOLD, 54, index=0)   # 合計
+        f_normal = ImageFont.truetype(FONT_BOLD, 44, index=0)   # 品項、訂單、付款、找零
+        f_small  = ImageFont.truetype(FONT_BOLD, 38, index=0)   # 時間、備註、分隔線
+        f_disc   = ImageFont.truetype(FONT_BOLD, 36, index=0)   # 折扣標籤
+        f_item   = ImageFont.truetype(FONT_BOLD, 35, index=0)   # 品項名稱與金額
     except Exception as e:
         return jsonify({'ok': False, 'error': f'font: {e}'}), 500
 
@@ -923,53 +943,148 @@ def print_receipt():
     def add(text, font, align='left', mt=0):
         rows.append((text, font, align, mt))
     def sep():
-        add('- ' * 22, f_small, 'left', 4)
+        add('- ' * 22, f_small, 'left', 6)
+
+    def _w(s, font):
+        return font.getbbox(s)[2] - font.getbbox(s)[0]
+
+    def wrap_to_fit(text, font, max_w):
+        """把長字串依字寬換行；若有空格，優先在空格處斷行（保留詞組完整）。"""
+        if not text:
+            return [text]
+        out, line = [], ''
+        # 先按空格切詞組；單一詞組超寬再退回逐字斷
+        tokens = text.split(' ')
+        for i, tok in enumerate(tokens):
+            sep = '' if not line else ' '
+            cand = line + sep + tok
+            if _w(cand, font) <= max_w:
+                line = cand
+                continue
+            # 加入後超寬：先把現有 line 收掉
+            if line:
+                out.append(line)
+                line = ''
+            # 詞組本身超寬 → 逐字斷
+            if _w(tok, font) > max_w:
+                cur = ''
+                for ch in tok:
+                    if _w(cur + ch, font) > max_w and cur:
+                        out.append(cur)
+                        cur = ch
+                    else:
+                        cur += ch
+                line = cur
+            else:
+                line = tok
+        if line:
+            out.append(line)
+        return out
 
     add('滷味', f_title, 'center', 16)
-    add('收銀收據', f_sub, 'center', 6)
+    add('收銀收據', f_sub, 'center', 8)
     sep()
     add(f'訂單  {order_number}', f_normal, 'left', 8)
     if queue_number:
-        add(f'號碼牌  #{queue_number}', f_large, 'left', 4)
-    add(f'時間  {created_at}', f_small, 'left', 4)
+        add(f'號碼牌  #{queue_number}', f_queue, 'left', 8)
+    add(f'時間  {created_at}', f_small, 'left', 6)
+    _src = '手機點餐' if str(order_number).startswith('C') else 'POS 收銀'
+    add(f'來源  {_src}', f_small, 'left', 4)
+    if customer_phone:
+        add(f'電話  {customer_phone}', f_small, 'left', 4)
+    if is_reservation and pickup_time:
+        add(f'預約  {pickup_time}', f_small, 'left', 4)
+    if spec_text:
+        sep()
+        add('【口味】', f_spec, 'center', 4)
+        for raw_line in spec_text.split('\n'):
+            for part in wrap_to_fit(raw_line.strip(), f_spec, PAPER_W - 40):
+                if part:
+                    add(part, f_spec, 'left', 4)
     sep()
     for it in items:
         name = it.get('product_name', '')
         qty  = it.get('quantity', 1)
         sub  = float(it.get('subtotal') or 0)
-        add(f'{name} x{qty}', f_normal, 'left', 8)
-        add(f'${sub:.0f}', f_normal, 'right', 0)
+        dlbl = (it.get('discount_label') or '').strip()
+        # 名稱與金額同行：('__lr__', 左文, 右文, font, margin_top)
+        rows.append(('__lr__', f'{name} x{qty}', f'${sub:.0f}', f_item, 8))
+        if dlbl:
+            add(f'  ({dlbl})', f_disc, 'left', 0)
     sep()
-    add(f'合計  ${total:.0f}', f_large, 'right', 8)
-    add(f'付款  {pay_str}', f_normal, 'left', 8)
-    if payment == 'cash' and cash_received:
-        add(f'收款  ${cash_received:.0f}', f_normal, 'left', 4)
-        add(f'找零  ${change:.0f}', f_normal, 'left', 4)
-    if note:
+    if redeem_amount > 0:
+        add(f'原價  ${original_total:.0f}', f_normal, 'right', 6)
+        add(f'點數折抄  -${redeem_amount:.0f}', f_normal, 'right', 4)
+    add(f'合計  ${total:.0f}', f_large, 'right', 10)
+    if order_status in ('pending', 'confirmed'):
+        add('未結帳', f_normal, 'left', 8)
+    else:
+        add(f'已結帳  {pay_str}', f_normal, 'left', 8)
+        if payment == 'cash' and cash_received:
+            add(f'收款  ${cash_received:.0f}', f_normal, 'left', 4)
+            add(f'找零  ${change:.0f}', f_normal, 'left', 4)
+    if user_note:
         sep()
-        for part in textwrap.wrap(note, width=14):
-            add(part, f_small, 'left', 4)
-    add('', f_normal, 'left', 28)
+        add('備註', f_small, 'center', 4)
+        for raw_line in user_note.split('\n'):
+            for part in wrap_to_fit(raw_line.strip(), f_small, PAPER_W - 40):
+                if part:
+                    add(part, f_small, 'left', 4)
+    add('', f_normal, 'left', 32)
 
     # ── 計算總高 ──
     total_h = 0
-    for text, font, align, mt in rows:
-        total_h += mt
-        bb = font.getbbox(text)
-        total_h += (bb[3] - bb[1]) + 10
+    for row in rows:
+        if row[0] == '__lr__':
+            _, ltxt, rtxt, font, mt = row
+            rb = font.getbbox(rtxt); rw = rb[2] - rb[0]
+            name_max_w = PAPER_W - rw - 48  # 左右各20 + 間距8
+            total_h += mt
+            if _w(ltxt, font) <= name_max_w:
+                bb = font.getbbox(ltxt)
+                total_h += (bb[3] - bb[1]) + 10
+            else:
+                for nl in wrap_to_fit(ltxt, font, name_max_w):
+                    bb = font.getbbox(nl)
+                    total_h += (bb[3] - bb[1]) + 10
+        else:
+            text, font, align, mt = row
+            total_h += mt
+            bb = font.getbbox(text)
+            total_h += (bb[3] - bb[1]) + 10
 
     # ── 灰階渲染 → 1-bit ──
     img = Image.new('L', (PAPER_W, total_h), 255)
     draw = ImageDraw.Draw(img)
     y = 0
-    for text, font, align, mt in rows:
-        y += mt
-        bb   = font.getbbox(text)
-        w_t  = bb[2] - bb[0]
-        h_t  = bb[3] - bb[1]
-        x = (PAPER_W - w_t) // 2 if align == 'center' else (PAPER_W - w_t - 20 if align == 'right' else 20)
-        draw.text((x, y), text, font=font, fill=0)
-        y += h_t + 10
+    for row in rows:
+        if row[0] == '__lr__':
+            _, ltxt, rtxt, font, mt = row
+            y += mt
+            rb  = font.getbbox(rtxt); rw = rb[2] - rb[0]
+            name_max_w = PAPER_W - rw - 48
+            if _w(ltxt, font) <= name_max_w:
+                bb = font.getbbox(ltxt); h_t = bb[3] - bb[1]
+                draw.text((20, y), ltxt, font=font, fill=0)
+                draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
+                y += h_t + 10
+            else:
+                name_lines = wrap_to_fit(ltxt, font, name_max_w)
+                for i, nl in enumerate(name_lines):
+                    bb = font.getbbox(nl); h_t = bb[3] - bb[1]
+                    draw.text((20, y), nl, font=font, fill=0)
+                    if i == len(name_lines) - 1:
+                        draw.text((PAPER_W - rw - 20, y), rtxt, font=font, fill=0)
+                    y += h_t + 10
+        else:
+            text, font, align, mt = row
+            y += mt
+            bb   = font.getbbox(text)
+            w_t  = bb[2] - bb[0]
+            h_t  = bb[3] - bb[1]
+            x = (PAPER_W - w_t) // 2 if align == 'center' else (PAPER_W - w_t - 20 if align == 'right' else 20)
+            draw.text((x, y), text, font=font, fill=0)
+            y += h_t + 10
 
     img1 = img.point(lambda p: 0 if p < 180 else 255, '1')
     pixels = img1.load()
@@ -991,6 +1106,69 @@ def print_receipt():
             buf.append(bv)
     buf += bytes([0x1B, 0x64, 0x05])
     buf += bytes([0x1D, 0x56, 0x41, 0x00])
+
+    # ── 號碼牌取號單（第二張）──
+    def _make_ticket_buf():
+        f_t_brand = ImageFont.truetype(FONT_BOLD, 72, index=0)
+        f_t_label = ImageFont.truetype(FONT_BOLD, 44, index=0)
+        f_t_num   = ImageFont.truetype(FONT_BOLD, 160, index=0)
+        f_t_info  = ImageFont.truetype(FONT_BOLD, 38, index=0)
+
+        trows = []
+        def tadd(text, font, align='center', mt=0):
+            trows.append((text, font, align, mt))
+        def tsep():
+            tadd('- ' * 22, f_t_info, 'left', 6)
+
+        tadd('桶江軍', f_t_brand, 'center', 20)
+        tadd('顧客號碼', f_t_label, 'center', 8)
+        tsep()
+        tadd(f'#{queue_number}' if queue_number else '#--', f_t_num, 'center', 10)
+        tsep()
+        tadd(f'訂單  {order_number}', f_t_info, 'left', 6)
+        tadd(f'時間  {created_at}', f_t_info, 'left', 4)
+        tadd('', f_t_info, 'left', 32)
+
+        th = 0
+        for text, font, align, mt in trows:
+            th += mt
+            bb = font.getbbox(text)
+            th += (bb[3] - bb[1]) + 10
+
+        timg = Image.new('L', (PAPER_W, th), 255)
+        tdraw = ImageDraw.Draw(timg)
+        y = 0
+        for text, font, align, mt in trows:
+            y += mt
+            bb = font.getbbox(text)
+            w_t = bb[2] - bb[0]
+            h_t = bb[3] - bb[1]
+            x = (PAPER_W - w_t) // 2 if align == 'center' else (PAPER_W - w_t - 20 if align == 'right' else 20)
+            tdraw.text((x, y), text, font=font, fill=0)
+            y += h_t + 10
+
+        timg1 = timg.point(lambda p: 0 if p < 180 else 255, '1')
+        tpix = timg1.load()
+        byte_w2 = (PAPER_W + 7) // 8
+        tbuf = bytearray()
+        tbuf += bytes([0x1B, 0x40])
+        tbuf += bytes([0x1D, 0x76, 0x30, 0x00,
+                       byte_w2 & 0xFF, (byte_w2 >> 8) & 0xFF,
+                       th & 0xFF, (th >> 8) & 0xFF])
+        for row in range(th):
+            for cb in range(byte_w2):
+                bv = 0
+                for bit in range(8):
+                    col = cb * 8 + bit
+                    if col < PAPER_W and tpix[col, row] == 0:
+                        bv |= (0x80 >> bit)
+                tbuf.append(bv)
+        tbuf += bytes([0x1B, 0x64, 0x05])
+        tbuf += bytes([0x1D, 0x56, 0x41, 0x00])
+        return tbuf
+
+    if queue_number:
+        buf += _make_ticket_buf()
 
     try:
         s = _sock.create_connection((PRINT_HOST, PRINT_PORT), timeout=5)
@@ -1014,7 +1192,7 @@ def epos_device_list():
 def epos_service():
     """ePOS-Print SOAP proxy：轉發到真實印表機，回傳結果給平板"""
     import urllib.request as _req, ssl
-    PRINTER_EPOS = 'https://192.168.0.27/cgi-bin/epos/service.cgi'
+    PRINTER_EPOS = 'https://192.168.1.124/cgi-bin/epos/service.cgi'
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
