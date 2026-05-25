@@ -110,6 +110,7 @@ holding_lock = threading.Lock()
 
 _printer_sock = [None]
 _printer_lock = threading.RLock()
+_printer_send_lock = threading.Lock()   # 序列化實際 sendall，防止 ESC @ reset 互搶
 _tablet_sock  = [None]
 _tablet_lock  = threading.Lock()
 
@@ -451,7 +452,8 @@ def handle_conn(conn, addr):
                 p = _printer_sock[0]
             if p:
                 try:
-                    p.sendall(data)
+                    with _printer_send_lock:      # 防止與本機列印 ESC @ 互 reset
+                        p.sendall(data)
                 except Exception as e:
                     print(f"[{ts()}][平板→印表機] 送出失敗：{e}")
     except OSError:
@@ -541,7 +543,8 @@ def _handle_local_print(conn):
             p = _printer_sock[0]
         if p:
             try:
-                p.sendall(bytes(buf))
+                with _printer_send_lock:          # 防止多份收據 ESC @ 互 reset
+                    p.sendall(bytes(buf))
                 print(f"[{ts()}][本機列印] 送出 {len(buf)} bytes 透過現有連線")
             except Exception as e:
                 print(f"[{ts()}][本機列印] 送出失敗：{e}")
