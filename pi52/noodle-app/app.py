@@ -1231,6 +1231,47 @@ def epos_system_port_list():
         mimetype='application/json'
     )
 
+# ──── 出單機變更紀錄 ──────────────────────────────────────────────────────────
+
+NOODLE_DB = '/var/www/html/noodle.db'
+
+def _noodle_db():
+    import sqlite3 as _sq
+    con = _sq.connect(NOODLE_DB)
+    con.row_factory = _sq.Row
+    return con
+
+@app.route('/changelog')
+def page_changelog():
+    con = _noodle_db()
+    rows = con.execute('SELECT * FROM changelog ORDER BY id DESC').fetchall()
+    latest = rows[0]['version'] if rows else 'v0'
+    con.close()
+    return render_template('printer_changelog.html', rows=rows, latest=latest)
+
+@app.route('/api/changelog', methods=['POST'])
+def api_changelog_add():
+    import sqlite3 as _sq
+    data = request.get_json(force=True)
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify({'ok': False, 'error': 'title required'}), 400
+    body       = (data.get('body') or '').strip()
+    tag        = data.get('tag', 'feature')
+    changed_by = (data.get('changed_by') or 'jeff').strip()
+    commit_ref = (data.get('commit_ref') or '').strip()
+    con = _noodle_db()
+    count = con.execute('SELECT COUNT(*) FROM changelog').fetchone()[0]
+    version = f'v{count + 1}'
+    con.execute(
+        'INSERT INTO changelog(version,title,body,tag,changed_by,commit_ref) VALUES(?,?,?,?,?,?)',
+        (version, title, body, tag, changed_by, commit_ref)
+    )
+    con.commit()
+    con.close()
+    return jsonify({'ok': True, 'version': version})
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
 
