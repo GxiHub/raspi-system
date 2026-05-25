@@ -996,7 +996,7 @@ def api_order_meta(oid):
             _w, _h = _img.size
             # 只裁切頂部（訂單代碼）和底部（金額）兩個小區域，快 5-8x
             _top = _img.crop((0, 0, _w, min(250, _h)))
-            _bot = _img.crop((0, max(0, _h - 300), _w, _h))
+            _bot = _img.crop((0, max(0, _h - 600), _w, _h))  # 600px 覆蓋較長的收據
             _top_text = pytesseract.image_to_string(_top, lang='eng', config='--psm 6 --oem 3', timeout=12)
             _bot_text = pytesseract.image_to_string(_bot, lang='eng', config='--psm 6 --oem 3', timeout=12)
         except Exception as e:
