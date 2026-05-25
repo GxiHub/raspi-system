@@ -1664,32 +1664,17 @@ document.addEventListener('fullscreenchange', () => {
     </div>
 </div>
 
-<!-- ── 底部快捷連結 ── -->
-<div style="
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: rgba(26,35,50,0.95); backdrop-filter: blur(8px);
-  border-top: 1px solid #2d3e55;
-  display: flex; justify-content: center; gap: 0;
-  z-index: 50; padding-bottom: env(safe-area-inset-bottom,0px);
-">
+<!-- UberEats 訂單入口 -->
+<div style="position:fixed;bottom:16px;right:16px;z-index:50;">
   <a href="/orders" style="
-    flex: 1; max-width: 160px; display: flex; flex-direction: column;
-    align-items: center; padding: 10px 8px; text-decoration: none;
-    color: #64748b; font-size: 11px; gap: 4px;
-    border-right: 1px solid #2d3e55; transition: color .15s;
+    display:flex;flex-direction:column;align-items:center;
+    background:rgba(26,35,50,0.92);backdrop-filter:blur(8px);
+    border:1px solid #2d3e55;border-radius:12px;
+    padding:10px 14px;text-decoration:none;color:#64748b;font-size:11px;gap:4px;
   " onmouseover="this.style.color='#06c167'" onmouseout="this.style.color='#64748b'">
-    <span style="font-size:20px">🛵</span>UberEats 訂單
-  </a>
-  <a href="/changelog" style="
-    flex: 1; max-width: 160px; display: flex; flex-direction: column;
-    align-items: center; padding: 10px 8px; text-decoration: none;
-    color: #64748b; font-size: 11px; gap: 4px; transition: color .15s;
-  " onmouseover="this.style.color='#3b82f6'" onmouseout="this.style.color='#64748b'">
-    <span style="font-size:20px">📋</span>變更紀錄
+    <span style="font-size:20px">🛵</span>訂單
   </a>
 </div>
-<!-- 底部 bar 佔位 -->
-<div style="height: 64px;"></div>
 
 </body>
 </html>
