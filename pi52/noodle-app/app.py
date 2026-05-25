@@ -859,13 +859,32 @@ def page_orders():
 @app.route('/api/orders')
 def api_orders():
     try:
+        page     = max(1, int(request.args.get('page', 1)))
+        per_page = min(50, max(10, int(request.args.get('per_page', 20))))
+        date_q   = request.args.get('date', '')
+        tablet_q = request.args.get('tablet', '')
         con = _orders_db()
+        where, params = [], []
+        if date_q:
+            where.append('received_at LIKE ?')
+            params.append(date_q + '%')
+        if tablet_q:
+            where.append('tablet_ip = ?')
+            params.append(tablet_q)
+        w_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+        total = con.execute('SELECT COUNT(*) FROM orders ' + w_sql, params).fetchone()[0]
+        offset = (page - 1) * per_page
         rows = con.execute(
             'SELECT id, received_at, tablet_ip, job_id, image_path, raw_size '
-            'FROM orders ORDER BY id DESC LIMIT 100'
+            'FROM orders ' + w_sql + ' ORDER BY id DESC LIMIT ? OFFSET ?',
+            params + [per_page, offset]
         ).fetchall()
+        tablets = [r[0] for r in con.execute(
+            'SELECT DISTINCT tablet_ip FROM orders ORDER BY tablet_ip'
+        ).fetchall()]
         con.close()
-        return jsonify([dict(r) for r in rows])
+        return jsonify({'orders': [dict(r) for r in rows], 'total': total,
+                        'page': page, 'per_page': per_page, 'tablets': tablets})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
