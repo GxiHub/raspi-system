@@ -992,35 +992,29 @@ def api_order_meta(oid):
         try:
             import pytesseract
             from PIL import Image as _Image
-            img = _Image.open(img_file)
-            text = pytesseract.image_to_string(img, lang='chi_tra+eng', config='--psm 6 --oem 3', timeout=20)
+            _img = _Image.open(img_file).convert('L')
+            _w, _h = _img.size
+            # 只裁切頂部（訂單代碼）和底部（金額）兩個小區域，快 5-8x
+            _top = _img.crop((0, 0, _w, min(250, _h)))
+            _bot = _img.crop((0, max(0, _h - 300), _w, _h))
+            _top_text = pytesseract.image_to_string(_top, lang='eng', config='--psm 6 --oem 3', timeout=12)
+            _bot_text = pytesseract.image_to_string(_bot, lang='eng', config='--psm 6 --oem 3', timeout=12)
         except Exception as e:
             con.close()
             return jsonify({'ok': False, 'error': f'ocr error: {e}'}), 500
 
-        # 提取訂單代碼：只在首個含$的行之前搜尋，避免被品項英文干擾
-        _hlines = []
-        for _l in text.split('\n'):
-            if re.search(r'\$[0-9]', _l):
-                break
-            _hlines.append(_l)
-        _hdr = ' '.join(_hlines)
-        code_m = re.search(r'[.。\s]+([A-Z0-9]{4,6})\b', _hdr) or re.search(r'\b([A-Z0-9]{4,6})\b', _hdr)
-        order_code = code_m.group(1) if code_m else ''
+        # 訂單代碼：優先取 dot 後的代碼（"Customer. CODE"格式）
+        code_m = re.search(r'[.]+\s*([A-Z0-9]{4,6})\b', _top_text)
+        if not code_m:
+            _first3 = ' '.join(_top_text.split('\n')[:3])
+            _cands = re.findall(r'\b([A-Z0-9]{4,6})\b', _first3)
+            order_code = _cands[-1] if _cands else ''
+        else:
+            order_code = code_m.group(1)
 
-        # 提取已付金額
-        lines = text.split('\n')
-        paid_amount = ''
-        subtotal = ''
-        for line in lines:
-            m = re.search(r'([0-9,]+\.[0-9]+)', line)
-            if m:
-                if any(c in line for c in ['付', 'paid', 'Paid']):
-                    paid_amount = m.group(1)
-                elif any(c in line for c in ['小計', '小计', 'sub', 'Sub']):
-                    subtotal = m.group(1)
-        if not paid_amount:
-            paid_amount = subtotal
+        # 金額：取底部最後一個 $XX.XX（通常是已付金額）
+        _amounts = re.findall(r'\$([0-9,]+\.[0-9]+)', _bot_text)
+        paid_amount = _amounts[-1] if _amounts else ''
 
         # 嘗試存回 DB（若欄位存在）
         try:
