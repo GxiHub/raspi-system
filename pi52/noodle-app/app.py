@@ -900,6 +900,137 @@ def api_order_detail(oid):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/orders/<int:oid>/reprint', methods=['POST'])
+def api_order_reprint(oid):
+    """把已存的 UberEats PNG 重新送到印表機"""
+    import socket as _sock
+    from PIL import Image
+    import os, struct
+
+    PRINT_HOST = '127.0.0.1'
+    PRINT_PORT = 9200
+    PAPER_W    = 576
+
+    try:
+        con = _orders_db()
+        row = con.execute('SELECT image_path FROM orders WHERE id=?', (oid,)).fetchone()
+        con.close()
+        if not row or not row['image_path']:
+            return jsonify({'ok': False, 'error': 'not found'}), 404
+
+        img_file = os.path.join('/var/www/html/static', row['image_path'])
+        if not os.path.exists(img_file):
+            return jsonify({'ok': False, 'error': 'image file missing'}), 404
+
+        img = Image.open(img_file).convert('L')
+        # 縮放到紙張寬度
+        if img.width != PAPER_W:
+            h = int(img.height * PAPER_W / img.width)
+            img = img.resize((PAPER_W, h), Image.LANCZOS)
+        # 轉 1-bit
+        bw = img.point(lambda p: 0 if p < 128 else 255, '1')
+        w, h = bw.size
+        width_bytes = (w + 7) // 8
+
+        buf = bytearray()
+        buf += b'@'           # ESC @ init
+        buf += b'a'      # center
+        # GS v 0 raster image
+        buf += bytes([0x1D, 0x76, 0x30, 0x00,
+                      width_bytes & 0xFF, (width_bytes >> 8) & 0xFF,
+                      h & 0xFF,          (h >> 8) & 0xFF])
+        pixels = list(bw.getdata())
+        for y in range(h):
+            byte_val = 0
+            for x in range(w):
+                if pixels[y * w + x] == 0:
+                    byte_val |= (0x80 >> (x % 8))
+                if x % 8 == 7:
+                    buf.append(byte_val); byte_val = 0
+            if w % 8:
+                buf.append(byte_val)
+        buf += bytes([0x1B, 0x64, 0x05])     # feed
+        buf += bytes([0x1D, 0x56, 0x41, 0x00])  # cut
+
+        s = _sock.create_connection((PRINT_HOST, PRINT_PORT), timeout=5)
+        s.sendall(bytes(buf))
+        s.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/orders/<int:oid>/meta')
+def api_order_meta(oid):
+    """OCR 讀取訂單圖片，提取單號/總金額，結果快取在 DB"""
+    import re
+    import os
+
+    try:
+        con = _orders_db()
+
+        # 先查 cache（orders 表如果有 order_code 欄）
+        row = con.execute('SELECT * FROM orders WHERE id=?', (oid,)).fetchone()
+        if not row:
+            con.close()
+            return jsonify({'ok': False, 'error': 'not found'}), 404
+
+        d = dict(row)
+
+        # 若已快取
+        if d.get('order_code') and d.get('paid_amount'):
+            con.close()
+            return jsonify({'ok': True, 'order_code': d['order_code'], 'paid_amount': d['paid_amount']})
+
+        # 沒快取 → OCR
+        img_file = os.path.join('/var/www/html/static', d.get('image_path', ''))
+        if not os.path.exists(img_file):
+            con.close()
+            return jsonify({'ok': False, 'error': 'image missing'}), 404
+
+        try:
+            import pytesseract
+            from PIL import Image as _Image
+            img = _Image.open(img_file)
+            text = pytesseract.image_to_string(img, lang='chi_tra+eng', config='--psm 6')
+        except Exception as e:
+            con.close()
+            return jsonify({'ok': False, 'error': f'ocr error: {e}'}), 500
+
+        # 提取訂單代碼（右上角 4-6 位數字）
+        code_m = re.search(r'\b([0-9]{4,6})\b', text)
+        order_code = code_m.group(1) if code_m else ''
+
+        # 提取已付金額
+        lines = text.split('\n')
+        paid_amount = ''
+        subtotal = ''
+        for line in lines:
+            m = re.search(r'([0-9,]+\.[0-9]+)', line)
+            if m:
+                if any(c in line for c in ['付', 'paid', 'Paid']):
+                    paid_amount = m.group(1)
+                elif any(c in line for c in ['小計', '小计', 'sub', 'Sub']):
+                    subtotal = m.group(1)
+        if not paid_amount:
+            paid_amount = subtotal
+
+        # 嘗試存回 DB（若欄位存在）
+        try:
+            con.execute(
+                'UPDATE orders SET order_code=?, paid_amount=? WHERE id=?',
+                (order_code, paid_amount, oid)
+            )
+            con.commit()
+        except Exception:
+            pass  # 欄位不存在時忽略
+        con.close()
+
+        return jsonify({'ok': True, 'order_code': order_code, 'paid_amount': paid_amount})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @app.route('/api/print_receipt', methods=['POST'])
 def print_receipt():
     import socket as _sock
