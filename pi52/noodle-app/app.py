@@ -978,10 +978,10 @@ def api_order_meta(oid):
 
         d = dict(row)
 
-        # 若已快取
-        if d.get('order_code') and d.get('paid_amount'):
+        # 若已快取（NULL = 未跑，'' 或有值 = 已跑，即使空字串也不重跑）
+        if d.get('paid_amount') is not None:
             con.close()
-            return jsonify({'ok': True, 'order_code': d['order_code'], 'paid_amount': d['paid_amount']})
+            return jsonify({'ok': True, 'order_code': d.get('order_code') or '', 'paid_amount': d.get('paid_amount') or ''})
 
         # 沒快取 → OCR
         img_file = os.path.join('/var/www/html/static', d.get('image_path', ''))
@@ -993,13 +993,19 @@ def api_order_meta(oid):
             import pytesseract
             from PIL import Image as _Image
             img = _Image.open(img_file)
-            text = pytesseract.image_to_string(img, lang='chi_tra+eng', config='--psm 6')
+            text = pytesseract.image_to_string(img, lang='chi_tra+eng', config='--psm 6 --oem 3', timeout=20)
         except Exception as e:
             con.close()
             return jsonify({'ok': False, 'error': f'ocr error: {e}'}), 500
 
-        # 提取訂單代碼（右上角 4-6 位數字）
-        code_m = re.search(r'\b([0-9]{4,6})\b', text)
+        # 提取訂單代碼：只在首個含$的行之前搜尋，避免被品項英文干擾
+        _hlines = []
+        for _l in text.split('\n'):
+            if re.search(r'\$[0-9]', _l):
+                break
+            _hlines.append(_l)
+        _hdr = ' '.join(_hlines)
+        code_m = re.search(r'[.。\s]+([A-Z0-9]{4,6})\b', _hdr) or re.search(r'\b([A-Z0-9]{4,6})\b', _hdr)
         order_code = code_m.group(1) if code_m else ''
 
         # 提取已付金額
