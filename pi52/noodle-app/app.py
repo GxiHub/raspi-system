@@ -1014,7 +1014,7 @@ def print_receipt():
     sep()
     if redeem_amount > 0:
         add(f'原價  ${original_total:.0f}', f_normal, 'right', 6)
-        add(f'點數折抄  -${redeem_amount:.0f}', f_normal, 'right', 4)
+        add(f'點數折抵  -${redeem_amount:.0f}', f_normal, 'right', 4)
     add(f'合計  ${total:.0f}', f_large, 'right', 10)
     if order_status in ('pending', 'confirmed'):
         add('未結帳', f_normal, 'left', 8)
@@ -1167,13 +1167,18 @@ def print_receipt():
         tbuf += bytes([0x1D, 0x56, 0x41, 0x00])
         return tbuf
 
-    if queue_number:
-        buf += _make_ticket_buf()
+    def _send_buf(data):
+        """送出 ESC/POS buffer 到 proxy（9200），單次連線上限 ~64KB，分批送避免印表機 buffer overflow"""
+        s = _sock.create_connection((PRINT_HOST, PRINT_PORT), timeout=5)
+        s.sendall(bytes(data))
+        s.close()
 
     try:
-        s = _sock.create_connection((PRINT_HOST, PRINT_PORT), timeout=5)
-        s.sendall(bytes(buf))
-        s.close()
+        _send_buf(buf)                          # 第一張：收銀收據
+        if queue_number:
+            import time as _time
+            _time.sleep(0.8)                    # 等印表機處理完收據再送號碼牌
+            _send_buf(_make_ticket_buf())        # 第二張：號碼牌
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
