@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=升降滷台 Kiosk
+Exec=/home/pi51/kiosk.sh
+X-GNOME-Autostart-enabled=true
