@@ -522,6 +522,64 @@ def api_health():
     except Exception as e:
         result['error'] = str(e)
 
+
+    # ── tablet 連線狀態（proxy.py 寫入）──
+    import json as _json, shutil, subprocess as _sp
+    try:
+        with open('/var/www/html/tablet_status.json') as _f:
+            result['tablets'] = _json.load(_f)
+    except Exception:
+        result['tablets'] = {}
+
+    # ── 每個 tablet 最後出單時間 ──
+    try:
+        _con = _sq_orders.connect(ORDERS_DB)
+        _rows = _con.execute(
+            'SELECT tablet_ip, MAX(received_at) as last_order, COUNT(*) as total'
+            ' FROM orders GROUP BY tablet_ip'
+        ).fetchall()
+        _con.close()
+        result['tablet_orders'] = {r[0]: {'last_order': r[1], 'total': r[2]} for r in _rows}
+    except Exception:
+        result['tablet_orders'] = {}
+
+    # ── 最近 8 筆訂單（出單品質）──
+    try:
+        _con = _sq_orders.connect(ORDERS_DB)
+        _con.row_factory = _sq_orders.Row
+        _rows = _con.execute(
+            'SELECT id, tablet_ip, received_at, order_code, paid_amount, image_path'
+            ' FROM orders ORDER BY id DESC LIMIT 8'
+        ).fetchall()
+        _con.close()
+        result['recent_orders'] = [dict(r) for r in _rows]
+    except Exception:
+        result['recent_orders'] = []
+
+    # ── 磁碟與記憶體 ──
+    try:
+        _disk = shutil.disk_usage('/var/www/html')
+        result['disk_pct'] = int(_disk.used / _disk.total * 100)
+        result['disk_free_gb'] = round(_disk.free / 1e9, 1)
+    except Exception:
+        pass
+    try:
+        with open('/proc/meminfo') as _f:
+            _mi = {l.split(':')[0]: int(l.split()[1]) for l in _f if ':' in l}
+        result['mem_used_mb'] = round((_mi.get('MemTotal',0) - _mi.get('MemAvailable',0)) / 1024)
+        result['mem_total_mb'] = round(_mi.get('MemTotal',0) / 1024)
+    except Exception:
+        pass
+
+    # ── service 狀態 ──
+    for _svc in ['noodle', 'printer-proxy']:
+        try:
+            _out = _sp.run(['systemctl', 'is-active', f'{_svc}.service'],
+                           capture_output=True, text=True, timeout=3).stdout.strip()
+            result.setdefault('services', {})[_svc] = _out
+        except Exception:
+            result.setdefault('services', {})[_svc] = 'unknown'
+
     return jsonify(result)
 
 
@@ -1380,6 +1438,7 @@ def epos_system_port_list():
         status=200,
         mimetype='application/json'
     )
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)

@@ -5,7 +5,7 @@ UberEats Printer Proxy
 - TCP 9100: 接收列印資料，透過常駐連線轉發到真實印表機
 - 解析 ESC/POS 訂單內容，存入 SQLite
 """
-import socket, threading, time, struct, zlib, sqlite3 as _sq, os as _os, datetime as _dt
+import socket, threading, time, struct, zlib, sqlite3 as _sq, os as _os, datetime as _dt, json as _json
 try:
     from PIL import Image as _Img
 except ImportError:
@@ -122,8 +122,25 @@ holding_lock = threading.Lock()
 _printer_sock = [None]
 _printer_lock = threading.RLock()
 _printer_send_lock = threading.Lock()   # 序列化實際 sendall，防止 ESC @ reset 互搶
-_tablet_sock  = [None]
-_tablet_lock  = threading.Lock()
+_tablet_sock   = [None]
+_tablet_lock   = threading.Lock()
+
+# tablet 連線狀態追蹤（{ip: {connected, last_seen, last_connect, last_disconnect}}）
+_tablet_status = {}
+_tablet_status_lock = threading.Lock()
+_STATUS_FILE = '/var/www/html/tablet_status.json'
+
+def _update_tablet_status(ip, **kwargs):
+    with _tablet_status_lock:
+        if ip not in _tablet_status:
+            _tablet_status[ip] = {}
+        _tablet_status[ip].update(kwargs)
+        _tablet_status[ip]['ip'] = ip
+        try:
+            with open(_STATUS_FILE, 'w') as _f:
+                _json.dump(_tablet_status, _f)
+        except Exception:
+            pass
 
 def ts():
     return time.strftime('%H:%M:%S')
@@ -444,6 +461,9 @@ def handle_conn(conn, addr):
     with _tablet_lock:
         _tablet_sock[0] = conn
 
+    _now = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    _update_tablet_status(addr[0], connected=True, last_connect=_now, last_seen=_now)
+
     job_buffer = bytearray()
 
     try:
@@ -457,6 +477,7 @@ def handle_conn(conn, addr):
             if not data:
                 print(f"[{ts()}][TCP] 平板送出 FIN（正常關閉） {addr[0]}")
                 break
+            _update_tablet_status(addr[0], last_seen=_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             job_buffer.extend(data)
             print(f"[{ts()}][平板→印表機] {len(data)} bytes: {data[:40].hex()}")
             with _printer_lock:
@@ -483,6 +504,7 @@ def handle_conn(conn, addr):
                 print(f"[{ts()}][訂單內容]\n{text}\n{'─'*40}")
 
         print(f"[{ts()}][TCP] 平板斷線 {addr[0]}")
+        _update_tablet_status(addr[0], connected=False, last_disconnect=_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         with _tablet_lock:
             if _tablet_sock[0] is conn:
                 _tablet_sock[0] = None
