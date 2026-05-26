@@ -94,8 +94,19 @@ def parse_and_save_order(raw_data: bytes, tablet_ip: str):
         (now.strftime('%Y-%m-%d %H:%M:%S'), tablet_ip, job_id,
          f'orders/{fname}', len(raw_data), int(time.time()))
     )
-    con.commit(); con.close()
+    con.commit()
+    new_id = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+    con.close()
     print(f'[{ts()}][訂單] 已儲存 job_id={job_id} → {fname}')
+
+    # 存完立刻背景跑 OCR（快取單號和金額，UI 之後開啟即時顯示）
+    def _auto_ocr(oid):
+        try:
+            import urllib.request as _ur
+            _ur.urlopen(f'http://127.0.0.1:5000/api/orders/{oid}/meta', timeout=60)
+        except Exception as _e:
+            print(f'[auto-OCR] order {oid} error: {_e}')
+    threading.Thread(target=_auto_ocr, args=(new_id,), daemon=True).start()
 
 MY_IP        = "192.168.1.109"
 MY_MAC       = "2ccf676b0c89"
