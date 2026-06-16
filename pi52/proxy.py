@@ -122,7 +122,7 @@ holding_lock = threading.Lock()
 _printer_sock = [None]
 _printer_lock = threading.RLock()
 _printer_send_lock = threading.Lock()   # 序列化實際 sendall，防止 ESC @ reset 互搶
-_tablet_sock   = [None]
+_tablet_socks  = {}             # {ip: conn}，支援多台平板同時連線
 _tablet_lock   = threading.Lock()
 
 # tablet 連線狀態追蹤（{ip: {connected, last_seen, last_connect, last_disconnect}}）
@@ -322,12 +322,10 @@ def handle_enpc(data, addr, sock):
         print(f"[{ts()}][UDP] STATUS_CHECK -> {addr[0]}")
 
     elif func == '03000017':
-        # 回傳實際 holding IP：已連線時回自己的 IP，空閒時回 0.0.0.0
-        with holding_lock:
-            h_ip = holding_ip
-        payload = socket.inet_aton(h_ip) if h_ip != "0.0.0.0" else bytes(4)
-        udp_send(make_enpc("q", "03000017", payload), addr)
-        print(f"[{ts()}][UDP] WHO_IS_HOLDING={h_ip} -> {addr[0]}")
+        # 固定回 0.0.0.0：讓兩台平板都認為印表機空閒可連線
+        # proxy 靠 _printer_send_lock 序列化，不需要競爭鎖
+        udp_send(make_enpc("q", "03000017", bytes(4)), addr)
+        print(f"[{ts()}][UDP] WHO_IS_HOLDING=0.0.0.0(fixed) -> {addr[0]}")
 
     elif func == '00000010':
         ip_b  = socket.inet_aton(MY_IP)
@@ -416,14 +414,14 @@ def printer_loop():
                 # 過濾 DLE_EOT 心跳回應（避免轉發給平板造成 connect-storm）
                 if len(data) <= 4 and data[0:1] == bytes([0x10]):
                     continue
-                print(f"[{ts()}][印表機→平板] {len(data)} bytes: {data[:40].hex()}")
                 with _tablet_lock:
-                    t = _tablet_sock[0]
-                if t:
+                    tablets = list(_tablet_socks.items())
+                print(f"[{ts()}][印表機→平板] {len(data)} bytes: {data[:40].hex()} (共{len(tablets)}台平板)")
+                for t_ip, t in tablets:
                     try:
                         t.sendall(data)
                     except Exception as e:
-                        print(f"[{ts()}][印表機→平板] 送出失敗：{e}")
+                        print(f"[{ts()}][印表機→平板] 送出失敗 {t_ip}: {e}")
 
         except Exception as e:
             print(f"[{ts()}][PRINTER] {e}")
@@ -459,7 +457,7 @@ def handle_conn(conn, addr):
         return
 
     with _tablet_lock:
-        _tablet_sock[0] = conn
+        _tablet_socks[addr[0]] = conn
 
     _now = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     _update_tablet_status(addr[0], connected=True, last_connect=_now, last_seen=_now)
@@ -506,8 +504,7 @@ def handle_conn(conn, addr):
         print(f"[{ts()}][TCP] 平板斷線 {addr[0]}")
         _update_tablet_status(addr[0], connected=False, last_disconnect=_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         with _tablet_lock:
-            if _tablet_sock[0] is conn:
-                _tablet_sock[0] = None
+            _tablet_socks.pop(addr[0], None)
         try:
             conn.close()
         except:
