@@ -322,10 +322,12 @@ def handle_enpc(data, addr, sock):
         print(f"[{ts()}][UDP] STATUS_CHECK -> {addr[0]}")
 
     elif func == '03000017':
-        # 固定回 0.0.0.0：讓兩台平板都認為印表機空閒可連線
-        # proxy 靠 _printer_send_lock 序列化，不需要競爭鎖
-        udp_send(make_enpc("q", "03000017", bytes(4)), addr)
-        print(f"[{ts()}][UDP] WHO_IS_HOLDING=0.0.0.0(fixed) -> {addr[0]}")
+        # 回傳實際 holding IP：已連線時回自己的 IP，空閒時回 0.0.0.0
+        with holding_lock:
+            h_ip = holding_ip
+        payload = socket.inet_aton(h_ip) if h_ip != "0.0.0.0" else bytes(4)
+        udp_send(make_enpc("q", "03000017", payload), addr)
+        print(f"[{ts()}][UDP] WHO_IS_HOLDING={h_ip} -> {addr[0]}")
 
     elif func == '00000010':
         ip_b  = socket.inet_aton(MY_IP)
