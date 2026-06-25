@@ -539,7 +539,6 @@ def api_health():
 
     try:
         get_ser()
-        result['serial_ok'] = True
 
         # 溫度感測器 0x08
         t = temp_read()
@@ -566,6 +565,9 @@ def api_health():
             'name': '電磁爐', 'addr': '0x01',
             'ok': probe(0x01, [0x01, 0x03, 0x10, 0x00, 0x00, 0x01])
         }
+
+        # 至少一台設備有回應才算 RS485 匯流排正常
+        result['serial_ok'] = any(d['ok'] for d in result['devices'].values())
 
     except Exception as e:
         result['error'] = str(e)
