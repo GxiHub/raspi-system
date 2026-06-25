@@ -134,6 +134,32 @@ input[type=range] {
 .cfg-label { font-size: 0.7em; color: var(--muted); display: block; margin-bottom: 2px; }
 .cfg-val   { font-size: 1.1em; font-weight: 700; color: var(--yellow); }
 
+/* ── 電機控制 ── */
+.motor-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.motor-card.running { border-color: var(--green); }
+.motor-title { font-weight: 700; font-size: 0.95em; color: var(--muted); min-width: 60px; }
+.motor-status { font-size: 0.85em; color: var(--muted); }
+.motor-status.on { color: var(--green); font-weight: 700; }
+.motor-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.motor-btns button { min-height: 44px; padding: 0 16px; border-radius: 10px; border: none; font-size: 0.9em; cursor: pointer; font-weight: 600; }
+.btn-motor-fwd  { background: #00875a; color: #fff; }
+.btn-motor-rev  { background: #0066cc; color: #fff; }
+.btn-motor-stop { background: #c0392b; color: #fff; }
+.motor-speed-wrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.motor-speed-wrap label { font-size: 0.8em; color: var(--muted); }
+.motor-speed-wrap input[type=number] { width: 80px; min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--inner); color: var(--text); font-size: 1em; font-weight: 700; text-align: center; padding: 0 6px; }
+.btn-spd { min-height: 44px; width: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--inner); color: var(--text); font-size: 1em; font-weight: 700; cursor: pointer; }
+
 /* ── 推桿 Grid ── */
 .actuator-grid {
     display: grid;
@@ -622,6 +648,23 @@ input[type=range] {
 <!-- ② 推桿 -->
 <div class="actuator-grid" id="act-grid"></div>
 
+<!-- ② 電機控制 -->
+<div class="motor-card" id="motor-card">
+    <span class="motor-title">⚙️ 電機</span>
+    <span class="motor-status" id="motor-status">停止</span>
+    <div class="motor-btns">
+        <button class="btn-motor-fwd"  onclick="motorRun('fwd')">▲ 正轉</button>
+        <button class="btn-motor-rev"  onclick="motorRun('rev')">▼ 反轉</button>
+        <button class="btn-motor-stop" onclick="motorStop()">■ 停止</button>
+    </div>
+    <div class="motor-speed-wrap">
+        <label>速度</label>
+        <button class="btn-spd" onclick="motorSpeedAdj(-2)">－</button>
+        <input type="number" min="0" max="10000" step="2" value="24" id="motor-speed-input" oninput="motorSpeedChange(this.value)">
+        <button class="btn-spd" onclick="motorSpeedAdj(2)">＋</button>
+    </div>
+</div>
+
 <!-- ② 自動溫控 -->
 <div class="auto-panel" style="margin-top:10px;">
     <div class="auto-header">
@@ -700,6 +743,7 @@ input[type=range] {
         <span class="uptime-txt" id="uptime-txt"></span>
         <button class="btn-diag" id="diag-btn" onclick="runDiagnosis()">一鍵診斷</button>
         <button class="btn-diag" onclick="softRefresh()">↺ 重新整理</button>
+        <button class="btn-diag" onclick="location.reload(true)">🔄 清快取</button>
         <a href="/temp_curve" target="_blank" class="btn-diag" style="text-decoration:none;">📈 曲線</a>
         <a href="/orders" target="_blank" class="btn-diag" style="text-decoration:none;display:none;">📋 訂單</a>
     </div>
@@ -712,20 +756,6 @@ input[type=range] {
     </div>
 </div>
 
-<!-- UberEats 訂單入口（隱藏） -->
-<div class="orders-entry-card" onclick="location.href='/orders'" style="display:none;">
-    <div class="orders-entry-left">
-        <div class="orders-entry-icon">🛵</div>
-        <div>
-            <div class="orders-entry-title">UberEats 訂單紀錄</div>
-            <div class="orders-entry-sub">查看收據圖片與歷史訂單</div>
-        </div>
-    </div>
-    <div class="orders-entry-right">
-        <div class="orders-entry-count" id="orders-total">--</div>
-        <div class="orders-entry-label">筆訂單</div>
-    </div>
-</div>
 
 
 
@@ -948,6 +978,49 @@ async function loadAllSettings() {
 
     renderTimeConfig();
     renderModeBtns();
+}
+
+// ── 電機控制 ────────────────────────────────────────────────────────────────
+let _motorSpeed = 24;
+
+async function motorRun(dir) {
+    await post('/api/motor/speed', { speed: _motorSpeed });
+    await post('/api/motor/run', { direction: dir });
+}
+
+async function motorStop() {
+    await post('/api/motor/stop', {});
+}
+
+function motorSpeedChange(val) {
+    _motorSpeed = Math.max(0, Math.min(10000, parseInt(val) || 0));
+    post('/api/motor/speed', { speed: _motorSpeed });
+}
+
+function motorSpeedAdj(delta) {
+    const input = document.getElementById('motor-speed-input');
+    _motorSpeed = Math.max(0, Math.min(10000, _motorSpeed + delta));
+    input.value = _motorSpeed;
+    post('/api/motor/speed', { speed: _motorSpeed });
+}
+
+function updateMotorUI(motor) {
+    if (!motor) return;
+    const card   = document.getElementById('motor-card');
+    const status = document.getElementById('motor-status');
+    const input  = document.getElementById('motor-speed-input');
+    card.classList.toggle('running', motor.running);
+    if (motor.running) {
+        status.className = 'motor-status on';
+        status.innerText = motor.dir === 'fwd' ? '▲ 正轉中' : '▼ 反轉中';
+    } else {
+        status.className = 'motor-status';
+        status.innerText = '停止';
+    }
+    if (document.activeElement !== input) {
+        input.value = motor.speed;
+        _motorSpeed = motor.speed;
+    }
 }
 
 // ── 推桿操作 ────────────────────────────────────────────────────────────────
@@ -1230,10 +1303,13 @@ async function pollStatus() {
             });
         }
 
+        if (d.motor) updateMotorUI(d.motor);
+
     } catch(e) { /* 網路暫時中斷，忽略 */ }
 }
 
 loadAllSettings();
+post('/api/motor/stop', {});
 setInterval(pollStatus, 2000);
 pollStatus();
 try { initTempChart(); } catch(e) { console.warn('Chart.js not loaded', e); }
@@ -1643,38 +1719,6 @@ document.addEventListener('fullscreenchange', () => {
 
 <script src="/static/chart.min.js"></script>
 
-<!-- 全畫面切換按鈕 -->
-<div class="fab-fullscreen" id="fab-fs" onclick="toggleFullscreen()" title="全畫面切換">⛶</div>
-
-<!-- 版本控制浮動按鈕 -->
-<div class="fab-version" onclick="openVerModal()" title="版本管理">🕐</div>
-
-<!-- 版本管理 Modal -->
-<div id="ver-modal">
-    <div class="ver-sheet">
-        <h2>🕐 版本管理</h2>
-        <div class="ver-save-row">
-            <input type="text" id="ver-label-input" placeholder="版本名稱（如：加了計時器）" maxlength="40">
-            <button class="btn-ver-save" onclick="saveVersion()">儲存現在版本</button>
-        </div>
-        <div class="ver-list" id="ver-list">
-            <div class="ver-empty">載入中...</div>
-        </div>
-        <button class="btn-ver-close" onclick="closeVerModal()">關閉</button>
-    </div>
-</div>
-
-<!-- UberEats 訂單入口 -->
-<div style="position:fixed;bottom:16px;right:16px;z-index:50;">
-  <a href="/orders" style="
-    display:flex;flex-direction:column;align-items:center;
-    background:rgba(26,35,50,0.92);backdrop-filter:blur(8px);
-    border:1px solid #2d3e55;border-radius:12px;
-    padding:10px 14px;text-decoration:none;color:#64748b;font-size:11px;gap:4px;
-  " onmouseover="this.style.color='#06c167'" onmouseout="this.style.color='#64748b'">
-    <span style="font-size:20px">🛵</span>訂單
-  </a>
-</div>
 
 </body>
 </html>

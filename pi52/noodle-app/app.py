@@ -61,6 +61,15 @@ FAN_MAP = {
     3: (4, 0x0C),
 }
 
+# 步進電機（原品牌，Slave 0x02）
+MOTOR_SLAVE      = 0x02
+MOTOR_REG_SPEED  = 0x009A  # 速度 (0~10000)
+MOTOR_REG_CMD    = 0x00C8  # 運行指令
+MOTOR_CMD_STOP   = 0       # 減速停止
+MOTOR_CMD_FWD    = 1       # 正轉
+MOTOR_CMD_REV    = 257     # 反轉
+MOTOR_CMD_ESTOP  = 256     # 急停
+
 # ── 共用狀態 ──────────────────────────────────────────────────────────────────
 serial_lock   = threading.Lock()
 current_temp  = None        # 最新溫度（None = 感測器故障/未讀到）
@@ -71,6 +80,9 @@ induction_error      = None  # 錯誤代碼（0=無故障）
 fan_states    = {1: False, 2: False, 3: False}
 relay_ok      = {'0b': False, '0c': False}
 auto_temp_on  = False       # 自動溫控開關
+motor_running = False       # 電機是否運行中
+motor_dir     = 'fwd'       # 'fwd' | 'rev'
+motor_speed   = 24          # 目前速度設定 (0~10000)
 
 AUTO_MAX_PWR = 65   # 自動控溫最高功率上限
 
@@ -234,6 +246,33 @@ def actuator_retract(ch: int, travel_time: int):
     """推桿縮回（非阻塞，背景執行）"""
     t = threading.Thread(target=_retract_worker, args=(ch, travel_time), daemon=True)
     t.start()
+
+
+# ── 步進電機控制 ───────────────────────────────────────────────────────────────
+
+def _motor_fc06(reg: int, value: int):
+    """FC06 寫單寄存器到步進電機（需在 serial_lock 外呼叫）"""
+    data = struct.pack('>BBHH', MOTOR_SLAVE, 0x06, reg, value & 0xFFFF)
+    with serial_lock:
+        _send(data)
+
+def motor_set_speed(speed: int):
+    global motor_speed
+    motor_speed = max(0, min(10000, speed))
+    _motor_fc06(MOTOR_REG_SPEED, motor_speed)
+
+def motor_run(direction: str):
+    global motor_running, motor_dir
+    motor_dir = direction
+    cmd = MOTOR_CMD_FWD if direction == 'fwd' else MOTOR_CMD_REV
+    _motor_fc06(MOTOR_REG_SPEED, motor_speed)
+    _motor_fc06(MOTOR_REG_CMD, cmd)
+    motor_running = True
+
+def motor_stop():
+    global motor_running
+    _motor_fc06(MOTOR_REG_CMD, MOTOR_CMD_STOP)
+    motor_running = False
 
 
 # ── 自動溫控背景執行緒 ────────────────────────────────────────────────────────
@@ -630,6 +669,11 @@ def api_status():
         'induction_actual_pwr': induction_actual_pwr,
         'induction_igbt_temp':  induction_igbt_temp,
         'induction_error':      induction_error,
+        'motor': {
+            'running': motor_running,
+            'dir':     motor_dir,
+            'speed':   motor_speed,
+        },
     })
 
 
@@ -671,6 +715,26 @@ def api_fan():
     coil_write(addr, coil, on)
     fan_states[fan] = on
     return jsonify({'status': 'ok', 'fan': fan, 'on': on})
+
+
+@app.route('/api/motor/speed', methods=['POST'])
+def api_motor_speed():
+    speed = int(request.json.get('speed', 300))
+    motor_set_speed(speed)
+    return jsonify({'status': 'ok', 'speed': motor_speed})
+
+@app.route('/api/motor/run', methods=['POST'])
+def api_motor_run():
+    direction = request.json.get('direction', 'fwd')
+    if direction not in ('fwd', 'rev'):
+        return jsonify({'status': 'error', 'msg': 'direction must be fwd or rev'}), 400
+    motor_run(direction)
+    return jsonify({'status': 'ok', 'direction': motor_dir, 'speed': motor_speed})
+
+@app.route('/api/motor/stop', methods=['POST'])
+def api_motor_stop():
+    motor_stop()
+    return jsonify({'status': 'ok'})
 
 
 @app.route('/api/auto_temp', methods=['POST'])
