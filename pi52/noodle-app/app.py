@@ -64,6 +64,8 @@ FAN_MAP = {
 # 步進電機（原品牌，Slave 0x02）
 MOTOR_SLAVE      = 0x02
 MOTOR_REG_SPEED  = 0x009A  # 速度 (0~10000)
+MOTOR_REG_ACCEL  = 0x0098  # 加速時間 (ms)
+MOTOR_REG_DECEL  = 0x0099  # 減速時間 (ms)
 MOTOR_REG_CMD    = 0x00C8  # 運行指令
 MOTOR_CMD_STOP   = 0       # 減速停止
 MOTOR_CMD_FWD    = 1       # 正轉
@@ -83,6 +85,7 @@ auto_temp_on  = False       # 自動溫控開關
 motor_running = False       # 電機是否運行中
 motor_dir     = 'fwd'       # 'fwd' | 'rev'
 motor_speed   = 24          # 目前速度設定 (0~10000)
+motor_accel   = 200         # 加速時間 (ms)
 
 AUTO_MAX_PWR = 65   # 自動控溫最高功率上限
 
@@ -261,10 +264,16 @@ def motor_set_speed(speed: int):
     motor_speed = max(0, min(10000, speed))
     _motor_fc06(MOTOR_REG_SPEED, motor_speed)
 
+def motor_set_accel(time_ms: int):
+    global motor_accel
+    motor_accel = max(0, min(65535, time_ms))
+    _motor_fc06(MOTOR_REG_ACCEL, motor_accel)
+
 def motor_run(direction: str):
     global motor_running, motor_dir
     motor_dir = direction
     cmd = MOTOR_CMD_FWD if direction == 'fwd' else MOTOR_CMD_REV
+    _motor_fc06(MOTOR_REG_ACCEL, motor_accel)
     _motor_fc06(MOTOR_REG_SPEED, motor_speed)
     _motor_fc06(MOTOR_REG_CMD, cmd)
     motor_running = True
@@ -673,6 +682,7 @@ def api_status():
             'running': motor_running,
             'dir':     motor_dir,
             'speed':   motor_speed,
+            'accel':   motor_accel,
         },
     })
 
@@ -735,6 +745,12 @@ def api_motor_run():
 def api_motor_stop():
     motor_stop()
     return jsonify({'status': 'ok'})
+
+@app.route('/api/motor/accel', methods=['POST'])
+def api_motor_accel():
+    time_ms = int(request.json.get('accel', 200))
+    motor_set_accel(time_ms)
+    return jsonify({'status': 'ok', 'accel': motor_accel})
 
 
 @app.route('/api/auto_temp', methods=['POST'])

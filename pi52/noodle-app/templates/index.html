@@ -663,6 +663,12 @@ input[type=range] {
         <input type="number" min="0" max="10000" step="2" value="24" id="motor-speed-input" oninput="motorSpeedChange(this.value)">
         <button class="btn-spd" onclick="motorSpeedAdj(2)">＋</button>
     </div>
+    <div class="motor-speed-wrap">
+        <label>加速(ms)</label>
+        <button class="btn-spd" onclick="motorAccelAdj(-50)">－</button>
+        <input type="number" min="0" max="65535" step="50" value="200" id="motor-accel-input" oninput="motorAccelChange(this.value)">
+        <button class="btn-spd" onclick="motorAccelAdj(50)">＋</button>
+    </div>
 </div>
 
 <!-- ② 自動溫控 -->
@@ -1004,11 +1010,26 @@ function motorSpeedAdj(delta) {
     post('/api/motor/speed', { speed: _motorSpeed });
 }
 
+let _motorAccel = 200;
+
+function motorAccelChange(val) {
+    _motorAccel = Math.max(0, Math.min(65535, parseInt(val) || 0));
+    post('/api/motor/accel', { accel: _motorAccel });
+}
+
+function motorAccelAdj(delta) {
+    const input = document.getElementById('motor-accel-input');
+    _motorAccel = Math.max(0, Math.min(65535, _motorAccel + delta));
+    input.value = _motorAccel;
+    post('/api/motor/accel', { accel: _motorAccel });
+}
+
 function updateMotorUI(motor) {
     if (!motor) return;
-    const card   = document.getElementById('motor-card');
-    const status = document.getElementById('motor-status');
-    const input  = document.getElementById('motor-speed-input');
+    const card       = document.getElementById('motor-card');
+    const status     = document.getElementById('motor-status');
+    const speedInput = document.getElementById('motor-speed-input');
+    const accelInput = document.getElementById('motor-accel-input');
     card.classList.toggle('running', motor.running);
     if (motor.running) {
         status.className = 'motor-status on';
@@ -1017,9 +1038,13 @@ function updateMotorUI(motor) {
         status.className = 'motor-status';
         status.innerText = '停止';
     }
-    if (document.activeElement !== input) {
-        input.value = motor.speed;
+    if (document.activeElement !== speedInput) {
+        speedInput.value = motor.speed;
         _motorSpeed = motor.speed;
+    }
+    if (document.activeElement !== accelInput) {
+        accelInput.value = motor.accel;
+        _motorAccel = motor.accel;
     }
 }
 
