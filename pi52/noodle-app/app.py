@@ -1286,11 +1286,29 @@ def print_receipt():
         add(f'預約  {pickup_time}', f_small, 'left', 4)
     if spec_text:
         sep()
-        add('【口味】', f_spec, 'center', 4)
+        is_multi = '【第' in spec_text  # 多人訂單格式
+        if not is_multi:
+            add('【口味】', f_spec, 'center', 4)
         for raw_line in spec_text.split('\n'):
-            for part in wrap_to_fit(raw_line.strip(), f_spec, PAPER_W - 40):
-                if part:
-                    add(part, f_spec, 'left', 4)
+            line = raw_line.strip()
+            if not line:
+                continue
+            if is_multi:
+                if line.startswith('【'):
+                    # 人員 header：大字加間距
+                    add(line, f_spec, 'left', 10)
+                elif line.startswith('備註'):
+                    # 備註行：小字縮排
+                    add(line, f_small, 'left', 2)
+                else:
+                    # 品項行：中字縮排
+                    for part in wrap_to_fit(line, f_normal, PAPER_W - 60):
+                        if part:
+                            add(part, f_normal, 'left', 2)
+            else:
+                for part in wrap_to_fit(line, f_spec, PAPER_W - 40):
+                    if part:
+                        add(part, f_spec, 'left', 4)
     sep()
     for it in items:
         name = it.get('product_name', '')
