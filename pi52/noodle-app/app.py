@@ -1202,9 +1202,9 @@ def print_receipt():
         add(f'電話  {customer_phone}', f_small, 'left', 4)
     if is_reservation and pickup_time:
         add(f'預約  {pickup_time}', f_small, 'left', 4)
+    is_multi = '【' in spec_text if spec_text else False
     if spec_text:
         sep()
-        is_multi = '【第' in spec_text  # 多人訂單格式
         if not is_multi:
             add('【口味】', f_spec, 'center', 4)
         for raw_line in spec_text.split('\n'):
@@ -1213,14 +1213,18 @@ def print_receipt():
                 continue
             if is_multi:
                 if line.startswith('【'):
-                    # 人員 header：大字加間距，超長自動換行
-                    for part in wrap_to_fit(line, f_spec, PAPER_W - 40):
-                        if part: add(part, f_spec, 'left', 10)
+                    # 分離姓名與口味: 【小明】清淡口味 → 姓名大字 + 口味中字
+                    parts = line.split('】', 1)
+                    name_part = parts[0][1:]
+                    flavor_part = parts[1].strip() if len(parts) > 1 else ''
+                    add(name_part, f_spec, 'left', 12)
+                    if flavor_part:
+                        for part in wrap_to_fit(flavor_part, f_normal, PAPER_W - 40):
+                            if part: add(part, f_normal, 'left', 2)
+                    add('', f_small, 'left', 6)  # 空行
                 elif line.startswith('備註'):
-                    # 備註行：小字縮排
                     add(line, f_small, 'left', 2)
                 else:
-                    # 品項行：中字縮排
                     for part in wrap_to_fit(line, f_normal, PAPER_W - 60):
                         if part:
                             add(part, f_normal, 'left', 2)
@@ -1229,16 +1233,25 @@ def print_receipt():
                     if part:
                         add(part, f_spec, 'left', 4)
     sep()
-    for it in items:
-        name = it.get('product_name', '')
-        qty  = it.get('quantity', 1)
-        sub  = float(it.get('subtotal') or 0)
-        dlbl = (it.get('discount_label') or '').strip()
-        # 名稱與金額同行：('__lr__', 左文, 右文, font, margin_top)
-        rows.append(('__lr__', f'{name} x{qty}', f'${sub:.0f}', f_item, 8))
-        if dlbl:
-            add(f'  ({dlbl})', f_disc, 'left', 0)
-    sep()
+    if not is_multi:
+        # 單人訂單：平列品項 + 價格
+        for it in items:
+            name = it.get('product_name', '')
+            qty  = it.get('quantity', 1)
+            sub  = float(it.get('subtotal') or 0)
+            dlbl = (it.get('discount_label') or '').strip()
+            rows.append(('__lr__', f'{name} x{qty}', f'${sub:.0f}', f_item, 8))
+            if dlbl:
+                add(f'  ({dlbl})', f_disc, 'left', 0)
+        sep()
+    else:
+        # 多人訂單：品項已在 spec 中逐人顯示，只補折扣品項的折扣標籤
+        for it in items:
+            dlbl = (it.get('discount_label') or '').strip()
+            if dlbl:
+                name = it.get('product_name', '')
+                add(f'  ({name} {dlbl})', f_disc, 'left', 0)
+        sep()
     if redeem_amount > 0:
         add(f'原價  ${original_total:.0f}', f_normal, 'right', 6)
         add(f'點數折抵  -${redeem_amount:.0f}', f_normal, 'right', 4)
