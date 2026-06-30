@@ -1,0 +1,21 @@
+[Unit]
+Description=煮麵自動化系統 Flask
+After=network.target
+
+[Service]
+User=__USER__
+WorkingDirectory=/var/www/html
+ExecStartPre=/bin/bash -c 'fuser -k 5000/tcp 2>/dev/null; sleep 1; true'
+ExecStart=/usr/bin/nice -n 10 /usr/bin/python3 /var/www/html/app.py
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+TimeoutStopSec=10
+KillMode=mixed
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
