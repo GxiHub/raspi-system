@@ -1,5 +1,5 @@
 [Desktop Entry]
 Type=Application
 Name=升降台系統 Kiosk
-Exec=/home/pi54/kiosk.sh
+Exec=/home/__USER__/kiosk.sh
 X-GNOME-Autostart-enabled=true
