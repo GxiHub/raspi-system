@@ -56,7 +56,7 @@ else
 fi
 
 # 9. 安裝 Python 套件
-pip3 install -q -r "$PROTO/requirements.txt"
+pip3 install -q --break-system-packages -r "$PROTO/requirements.txt"
 echo "✓ Python 套件"
 
 # 10. 重啟服務
