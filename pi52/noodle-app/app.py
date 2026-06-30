@@ -43,6 +43,17 @@ BAUD_RATE      = 9600
 RELAY1_ADDR    = 0x0B   # 繼電器模組一（目前唯一一台）
 INDUCTION_ADDR = 0x01   # 電磁爐
 TEMP_ADDR      = 0x08   # 溫度感測器
+MOTOR_ADDR     = 0x02   # 步進電機（原品牌）
+
+# 步進電機 0x00C8 指令碼
+MOTOR_STOP    = 0     # 減速停止
+MOTOR_FORWARD = 1     # 正轉
+MOTOR_REVERSE = 257   # 反轉
+MOTOR_ESTOP   = 256   # 急停
+
+# 角度換算：用時間而非脈衝（細分由硬體DIP設定，軟體讀不到）
+# 校正值 520ms/圈（speed=100），可由 UI 微調
+motor_ms_per_rev = 520
 
 # 推桿通道對應 {推桿號: (伸出線圈, 縮回線圈, 繼電器站號)} or None=待接
 ACTUATOR_MAP = {
@@ -170,6 +181,48 @@ def induction_set(pwr: int):
         _send(data)
     induction_pwr = pwr
 
+
+# ── 步進電機控制（原品牌，Slave 0x02）────────────────────────────────────────
+def _motor_write(reg: int, val: int):
+    """FC06 寫單一暫存器"""
+    data = struct.pack('>BBHH', MOTOR_ADDR, 0x06, reg, val & 0xFFFF)
+    with serial_lock:
+        return _send(data)
+
+def motor_set_speed(speed: int):
+    """設定速度（0~10000，建議 150~500）"""
+    speed = max(0, min(10000, int(speed)))
+    _motor_write(0x009A, speed)
+
+def motor_run(cmd: int):
+    """發送運行指令：MOTOR_FORWARD/REVERSE/STOP/ESTOP"""
+    _motor_write(0x00C8, cmd)
+
+def motor_clear_alarm():
+    """清除告警（寫 0 到告警暫存器）"""
+    _motor_write(0x0082, 0)
+
+_motor_timer: threading.Timer | None = None
+
+def motor_move_timed(ms: int, forward: bool = True):
+    """按時間運行：送 jog 指令，Python Timer 到時間後自動停止。"""
+    global _motor_timer
+    ms = max(ms, 50)   # 絕對最低 50ms（硬體保護）
+    if _motor_timer and _motor_timer.is_alive():
+        _motor_timer.cancel()
+    _motor_write(0x00C8, MOTOR_STOP)
+    time.sleep(0.06)
+    cmd = MOTOR_FORWARD if forward else MOTOR_REVERSE
+    _motor_write(0x00C8, cmd)
+    _motor_timer = threading.Timer(ms / 1000.0, _motor_timed_stop)
+    _motor_timer.daemon = True
+    _motor_timer.start()
+
+def _motor_timed_stop():
+    import sys
+    sys.stderr.write('[motor] timed stop fired\n')
+    sys.stderr.flush()
+    _motor_write(0x00C8, MOTOR_STOP)
 
 
 def induction_read_status():
@@ -957,6 +1010,53 @@ def api_order_detail(oid):
         return jsonify(dict(row))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/motor', methods=['POST'])
+def api_motor():
+    """步進電機控制
+    action: forward | reverse | stop | estop | speed | angle | set_ppr | clear_alarm
+    speed:  整數 0~10000（action=speed/forward/reverse/angle 時使用）
+    """
+    global motor_ms_per_rev
+    data = request.get_json(force=True, silent=True) or {}
+    action = data.get('action', '')
+    if action == 'forward':
+        motor_set_speed(data.get('speed', 300))
+        motor_run(MOTOR_FORWARD)
+    elif action == 'reverse':
+        motor_set_speed(data.get('speed', 300))
+        motor_run(MOTOR_REVERSE)
+    elif action == 'stop':
+        motor_run(MOTOR_STOP)
+    elif action == 'estop':
+        motor_run(MOTOR_ESTOP)
+    elif action == 'speed':
+        motor_set_speed(data.get('speed', 100))
+    elif action == 'angle':
+        degrees = int(data.get('degrees', 30))
+        forward = data.get('forward', True)
+        speed   = int(data.get('speed', 100))
+        # 目標：每個角度步進至少持續 150ms，避免慣性主導
+        # mpr 在 speed=100 時為 motor_ms_per_rev，速度愈低每圈ms愈長
+        MIN_MS = 150
+        base_speed = 100
+        effective_mpr = int(motor_ms_per_rev * base_speed / max(speed, 1))
+        ms = int(round(abs(degrees) * effective_mpr / 360))
+        if ms < MIN_MS:
+            # 反推需要多慢才能讓 ms >= MIN_MS
+            speed = max(1, int(speed * ms / MIN_MS))
+            effective_mpr = int(motor_ms_per_rev * base_speed / max(speed, 1))
+            ms = int(round(abs(degrees) * effective_mpr / 360))
+        motor_set_speed(speed)
+        motor_move_timed(ms, forward)
+    elif action == 'set_mpr':
+        motor_ms_per_rev = max(100, int(data.get('mpr', 5000)))
+    elif action == 'clear_alarm':
+        motor_clear_alarm()
+    else:
+        return jsonify({'error': 'unknown action'}), 400
+    return jsonify({'ok': True, 'action': action, 'mpr': motor_ms_per_rev})
 
 
 @app.route('/api/orders/<int:oid>/reprint', methods=['POST'])
