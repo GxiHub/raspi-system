@@ -1,15 +1,15 @@
 #!/bin/bash
-# 等 Flask 服務就緒才開瀏覽器
 until curl -sf http://localhost:5000 > /dev/null; do
     sleep 1
 done
 
-# 關螢幕保護 / 防止自動熄屏
-xset s off
-xset -dpms
-xset s noblank
+gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
+gsettings set org.gnome.desktop.screensaver lock-enabled false 2>/dev/null || true
 
-# Kiosk 全螢幕
+xset s off 2>/dev/null || true
+xset -dpms 2>/dev/null || true
+xset s noblank 2>/dev/null || true
+
 exec chromium \
     --kiosk \
     --noerrdialogs \
@@ -17,4 +17,9 @@ exec chromium \
     --no-first-run \
     --disable-session-crashed-bubble \
     --disable-restore-session-state \
+    --password-store=basic \
+    --disable-translate \
+    --lang=zh-TW \
+    --remote-debugging-port=9222 \
+    --remote-allow-origins=* \
     http://localhost:5000
