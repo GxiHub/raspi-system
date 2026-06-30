@@ -1,0 +1,30 @@
+[Unit]
+Description=煮麵自動化系統 Flask
+After=network.target
+
+[Service]
+User=pi52
+WorkingDirectory=/var/www/html
+
+# 啟動前先踢掉佔著 5000 port 的殭屍進程（5/14 crash 根本原因）
+ExecStartPre=/bin/bash -c 'fuser -k 5000/tcp 2>/dev/null; sleep 1; true'
+
+# OCR 吃 CPU，整個 process nice=10，讓出單/RS485 優先
+ExecStart=/usr/bin/nice -n 10 /usr/bin/python3 /var/www/html/app.py
+
+# 重啟策略：最多 5 次失敗/60秒，超過就停（防止 4000+ 次無限風暴）
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# 確保舊進程在 10 秒內被殺乾淨，不留殭屍佔 port
+TimeoutStopSec=10
+KillMode=mixed
+KillSignal=SIGTERM
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
