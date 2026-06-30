@@ -18,7 +18,7 @@ sudo mkdir -p /var/www/html/templates
 
 # 3. 建立 app.py symlink（如果不存在）
 if [ ! -L /var/www/html/app.py ]; then
-    sudo ln -sf "$REPO/pi52/noodle-app/app.py" /var/www/html/app.py
+    sudo ln -sf "$PROTO/app.py" /var/www/html/app.py
     echo "✓ app.py symlink 建立"
 else
     echo "- app.py symlink 已存在"
