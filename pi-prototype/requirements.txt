@@ -1,0 +1,5 @@
+flask
+pyserial
+pillow
+requests
+RPi.GPIO
