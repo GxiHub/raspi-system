@@ -339,6 +339,12 @@ def handle_enpc(data, addr, sock):
         pl = bytes([0x0e, 0x14, 0x00, 0x00, 0x0f, 0xff, 0xff, 0xff, 0xff, 0x39, 0x41, 0x40, 0x00])
         udp_send(make_enpc('q', '03000010', pl), addr)
 
+    elif func in ('03000001', '03000131'):
+        # 2026-07-02: 更新後的 UberEats app 會多送這兩個查詢，舊版 proxy 沒回應
+        # 導致平板判定「連接打印機時發生錯誤」。比照 03000016 回固定 OK。
+        udp_send(make_enpc("q", func, bytes(4)), addr)
+        print(f"[{ts()}][UDP] func={func} (OK) -> {addr[0]}")
+
     else:
         print(f"[{ts()}][UDP] 未知 ENPC func={func} 來自 {addr[0]} data={data[:20].hex()}")
 
