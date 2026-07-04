@@ -109,7 +109,7 @@ def parse_and_save_order(raw_data: bytes, tablet_ip: str):
     threading.Thread(target=_auto_ocr, args=(new_id,), daemon=True).start()
 
 MY_IP        = "192.168.1.109"
-MY_MAC       = "a4d73c123456"  # 2026-07-04: 改用 Epson 廠牌 OUI(a4:d7:3c)，原本樹莓派 MAC 被新版 app 判定非印表機廠牌
+MY_MAC       = "2ccf676b0c89"
 PRINTER_IP   = "192.168.1.124"
 PRINTER_PORT = 9100
 TCP_PORT     = 9100
