@@ -1220,6 +1220,8 @@ def print_receipt():
     order_status    = data.get('status', 'completed')
     is_reservation  = bool(data.get('is_reservation'))
     pickup_time     = (data.get('pickup_time') or '').strip()
+    order_type      = (data.get('order_type') or 'takeout').strip()
+    table_number    = (data.get('table_number') or '').strip()
     items           = data.get('items', [])
     # 結構化欄位（pi53 新版送來），舊版回退到 note 解析
     spec_text     = (data.get('spec_text') or '').strip()
@@ -1292,6 +1294,8 @@ def print_receipt():
     add('滷味', f_title, 'center', 16)
     add('收銀收據', f_sub, 'center', 8)
     sep()
+    if order_type == 'dine_in':
+        add(f'內用｜桌號 {table_number}', f_queue, 'center', 8)
     add(f'訂單  {order_number}', f_normal, 'left', 8)
     if queue_number:
         add(f'號碼牌  #{queue_number}', f_queue, 'left', 8)
