@@ -306,7 +306,7 @@ def handle_enpc(data, addr, sock):
         udp_send(make_enpc('q', '00000000', pl), addr)
 
     elif func == '03000000':
-        model = b'TM-m30II\x00'
+        model = b'TM-m30III\x00'
         pl = bytearray(133)
         pl[0:5] = bytes([0, 5, 1, 2, 1])
         pl[5:5 + len(model)] = model
@@ -386,8 +386,8 @@ def broadcast_presence():
                 '0001ffff15000200' + MY_MAC + '0000000100000001')
             udp_send(make_enpc('q', '00000000', pl_disc), (BROADCAST_IP, 3289))
 
-            # DEVICE_NAME 廣播：宣告型號為 TM-m30II
-            model = b'TM-m30II\x00'
+            # DEVICE_NAME 廣播：宣告型號為 TM-m30III
+            model = b'TM-m30III\x00'
             pl_name = bytearray(133)
             pl_name[0:5] = bytes([0, 5, 1, 2, 1])
             pl_name[5:5 + len(model)] = model
