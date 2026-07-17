@@ -1326,8 +1326,9 @@ def print_receipt():
                 flavor = (p.get('flavor') or '').strip()
                 add(pname, f_spec, 'left', 12)
                 if flavor:
-                    for part in wrap_to_fit(flavor, f_normal, PAPER_W - 40):
-                        if part: add(part, f_normal, 'left', 2)
+                    for part in wrap_to_fit(flavor, f_spec, PAPER_W - 40):
+                        if part: add(part, f_spec, 'left', 2)
+                    add('', f_small, 'left', 6)  # 口味底下空一行再接品項
                 for pit in (p.get('items') or []):
                     iname  = pit.get('name', '')
                     iqty   = pit.get('qty', 1)
