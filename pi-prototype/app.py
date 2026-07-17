@@ -1223,6 +1223,7 @@ def print_receipt():
     order_type      = (data.get('order_type') or 'takeout').strip()
     table_number    = (data.get('table_number') or '').strip()
     items           = data.get('items', [])
+    persons         = data.get('persons') or None  # 多人合併訂單：每人品項+單價+折扣標籤（沒有就走舊版 spec_text 純文字解析）
     # 結構化欄位（pi53 新版送來），舊版回退到 note 解析
     spec_text     = (data.get('spec_text') or '').strip()
     user_note     = (data.get('user_note') or '').strip()
@@ -1311,13 +1312,41 @@ def print_receipt():
         sep()
         if not is_multi:
             add('【口味】', f_spec, 'center', 4)
-        for raw_line in spec_text.split('\n'):
-            line = raw_line.strip()
-            if not line:
-                continue
-            if is_multi:
+            for raw_line in spec_text.split('\n'):
+                line = raw_line.strip()
+                if not line:
+                    continue
+                for part in wrap_to_fit(line, f_spec, PAPER_W - 40):
+                    if part:
+                        add(part, f_spec, 'left', 4)
+        elif persons:
+            # 多人訂單，有結構化 persons 資料：每人品項比照單人模式雙欄+金額顯示
+            for p in persons:
+                pname = (p.get('name') or '').strip()
+                flavor = (p.get('flavor') or '').strip()
+                add(pname, f_spec, 'left', 12)
+                if flavor:
+                    for part in wrap_to_fit(flavor, f_normal, PAPER_W - 40):
+                        if part: add(part, f_normal, 'left', 2)
+                for pit in (p.get('items') or []):
+                    iname  = pit.get('name', '')
+                    iqty   = pit.get('qty', 1)
+                    iprice = float(pit.get('price') or 0)
+                    idlbl  = (pit.get('discount_label') or '').strip()
+                    rows.append(('__lr__', f'{iname} x{iqty}', f'${iprice:.0f}', f_item, 8))
+                    if idlbl:
+                        add(f'  ({idlbl})', f_disc, 'left', 0)
+                pnote = (p.get('note') or '').strip()
+                if pnote:
+                    add(f'備註：{pnote}', f_small, 'left', 2)
+                add('', f_small, 'left', 6)  # 段落間空行
+        else:
+            # 舊版相容：沒有結構化 persons 資料時，品項純文字顯示（沒有金額）
+            for raw_line in spec_text.split('\n'):
+                line = raw_line.strip()
+                if not line:
+                    continue
                 if line.startswith('【'):
-                    # 分離姓名與口味: 【小明】清淡口味 → 姓名大字 + 口味中字
                     parts = line.split('】', 1)
                     name_part = parts[0][1:]
                     flavor_part = parts[1].strip() if len(parts) > 1 else ''
@@ -1325,17 +1354,13 @@ def print_receipt():
                     if flavor_part:
                         for part in wrap_to_fit(flavor_part, f_normal, PAPER_W - 40):
                             if part: add(part, f_normal, 'left', 2)
-                    add('', f_small, 'left', 6)  # 空行
+                    add('', f_small, 'left', 6)
                 elif line.startswith('備註'):
                     add(line, f_small, 'left', 2)
                 else:
                     for part in wrap_to_fit(line, f_normal, PAPER_W - 60):
                         if part:
                             add(part, f_normal, 'left', 2)
-            else:
-                for part in wrap_to_fit(line, f_spec, PAPER_W - 40):
-                    if part:
-                        add(part, f_spec, 'left', 4)
     sep()
     if not is_multi:
         # 單人訂單：平列品項 + 價格
@@ -1348,14 +1373,17 @@ def print_receipt():
             if dlbl:
                 add(f'  ({dlbl})', f_disc, 'left', 0)
         sep()
-    else:
-        # 多人訂單：品項已在 spec 中逐人顯示，只補折扣品項的折扣標籤
+    elif not persons:
+        # 舊版相容：沒有 persons 時，折扣標籤集中列在最後
         for it in items:
             dlbl = (it.get('discount_label') or '').strip()
             if dlbl:
                 name = it.get('product_name', '')
                 add(f'  ({name} {dlbl})', f_disc, 'left', 0)
         sep()
+    else:
+        # persons 已經逐人印完品項+折扣，前面 sep() 已經是收尾分隔線，這裡不再多印一條
+        pass
     if redeem_amount > 0:
         add(f'原價  ${original_total:.0f}', f_normal, 'right', 6)
         add(f'點數折抵  -${redeem_amount:.0f}', f_normal, 'right', 4)
