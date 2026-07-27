@@ -116,9 +116,9 @@ TCP_PORT     = 9100
 NETMASK      = bytes([0xff, 0xff, 0xff, 0x00])
 GATEWAY      = bytes([0xc0, 0xa8, 0x00, 0x01])
 
-# 2026-07-27: 暫時關閉 UberEats 平板連線（ENPC 探索 + TCP 9100/8008/8009），
-# POS 本機列印（127.0.0.1:9200）不受影響
-TABLET_ACCESS_ENABLED = False
+# 2026-07-27: 平板連線開關（ENPC 探索 + TCP 9100/8008/8009），
+# POS 本機列印（127.0.0.1:9200）不受此開關影響
+TABLET_ACCESS_ENABLED = True
 
 holding_ip   = "0.0.0.0"
 holding_lock = threading.Lock()
