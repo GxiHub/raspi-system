@@ -116,6 +116,10 @@ TCP_PORT     = 9100
 NETMASK      = bytes([0xff, 0xff, 0xff, 0x00])
 GATEWAY      = bytes([0xc0, 0xa8, 0x00, 0x01])
 
+# 2026-07-27: 暫時關閉 UberEats 平板連線（ENPC 探索 + TCP 9100/8008/8009），
+# POS 本機列印（127.0.0.1:9200）不受影響
+TABLET_ACCESS_ENABLED = False
+
 holding_ip   = "0.0.0.0"
 holding_lock = threading.Lock()
 
@@ -292,6 +296,8 @@ def udp_send(data, addr):
 
 def handle_enpc(data, addr, sock):
     global holding_ip
+    if not TABLET_ACCESS_ENABLED:  # 平板連線已關閉，不回應任何探索封包
+        return
     if addr[0] == MY_IP:  # 忽略自己送出去的廣播（避免 UDP 無限迴圈）
         return
     if len(data) < 14 or data[:5] != b'EPSON':
@@ -370,6 +376,8 @@ BROADCAST_IP = "192.168.1.255"
 def broadcast_presence():
     """印表機連線成功後廣播，讓平板重新感知印表機上線（解決 proxy 重啟後平板不重連問題）"""
     def _do():
+        if not TABLET_ACCESS_ENABLED:  # 平板連線已關閉，不主動廣播上線
+            return
         # 等 UDP socket 就緒
         for _ in range(20):
             with _udp_sock_lock:
@@ -531,6 +539,10 @@ def tcp_9100():
     while True:
         try:
             conn, addr = s.accept()
+            if not TABLET_ACCESS_ENABLED:
+                print(f"[{ts()}][TCP] 平板連線已關閉，拒絕 {addr[0]}")
+                conn.close()
+                continue
             threading.Thread(target=handle_conn, args=(conn, addr), daemon=True).start()
         except Exception as e:
             print(f"[{ts()}][TCP] Accept 錯誤：{e}")
@@ -631,6 +643,10 @@ def relay_server(local_port, remote_port):
     while True:
         try:
             conn, addr = s.accept()
+            if not TABLET_ACCESS_ENABLED:
+                print(f"[{ts()}][relay:{local_port}] 平板連線已關閉，拒絕 {addr[0]}")
+                conn.close()
+                continue
             threading.Thread(target=_handle_relay, args=(conn, addr, remote_port), daemon=True).start()
         except Exception as e:
             print(f"[{ts()}][relay:{local_port}] Accept 錯誤：{e}")
