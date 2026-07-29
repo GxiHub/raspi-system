@@ -116,9 +116,9 @@ TCP_PORT     = 9100
 NETMASK      = bytes([0xff, 0xff, 0xff, 0x00])
 GATEWAY      = bytes([0xc0, 0xa8, 0x00, 0x01])
 
-# 2026-07-27: 平板連線開關（ENPC 探索 + TCP 9100/8008/8009），
-# POS 本機列印（127.0.0.1:9200）不受此開關影響
-TABLET_ACCESS_ENABLED = True
+# 2026-07-29: 平板改直連真印表機，pi52 不再介入平板路徑
+# （ENPC 探索 + TCP 9100/8008/8009 保留程式碼，暫不開放；POS 走 127.0.0.1:9200，不受此開關影響）
+TABLET_ACCESS_ENABLED = False
 
 holding_ip   = "0.0.0.0"
 holding_lock = threading.Lock()
@@ -564,7 +564,7 @@ def printer_heartbeat():
 
 # ── 本機列印注入 port 9200 ──────────────────────────────────────────────────
 def local_print_server():
-    """127.0.0.1:9200 — 接收來自 Flask 的 ESC/POS 資料，透過現有 printer socket 送出"""
+    """127.0.0.1:9200 — 接收來自 Flask 的 ESC/POS 資料，臨時連上印表機送出（不常駐佔用）"""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(('127.0.0.1', 9200))
@@ -589,17 +589,21 @@ def _handle_local_print(conn):
         conn.close()
         if not buf:
             return
-        with _printer_lock:
-            p = _printer_sock[0]
-        if p:
-            try:
-                with _printer_send_lock:          # 防止多份收據 ESC @ 互 reset
-                    p.sendall(bytes(buf))
-                print(f"[{ts()}][本機列印] 送出 {len(buf)} bytes 透過現有連線")
-            except Exception as e:
-                print(f"[{ts()}][本機列印] 送出失敗：{e}")
-        else:
-            print(f"[{ts()}][本機列印] 印表機未連線，略過")
+
+        # 2026-07-29: POS 不再借用常駐連線，改成跟平板一樣臨時連上印表機、
+        # 印完馬上斷開，不長期佔用印表機的連線 slot
+        p = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        p.settimeout(10)
+        try:
+            p.connect((PRINTER_IP, PRINTER_PORT))
+            with _printer_send_lock:          # 防止多份收據 ESC @ 互 reset
+                p.sendall(bytes(buf))
+            print(f"[{ts()}][本機列印] 送出 {len(buf)} bytes（臨時連線，已送達即斷開）")
+        except Exception as e:
+            print(f"[{ts()}][本機列印] 送出失敗：{e}")
+        finally:
+            try: p.close()
+            except: pass
     except Exception as e:
         print(f"[{ts()}][本機列印] 錯誤：{e}")
 
@@ -659,13 +663,13 @@ print(f"  Mac IP    : {MY_IP}")
 print(f"  印表機 IP : {PRINTER_IP}:{PRINTER_PORT}")
 print("=" * 50)
 
-threading.Thread(target=printer_loop, daemon=True).start()
+# 2026-07-29: 不再常駐佔用印表機連線，POS 改成臨時連線列印（見 _handle_local_print）
+# printer_loop / printer_heartbeat 保留函式定義，暫不啟動
 threading.Thread(target=udp_3289,     daemon=True).start()
 threading.Thread(target=tcp_9100,     daemon=True).start()
 threading.Thread(target=local_print_server, daemon=True).start()
 threading.Thread(target=relay_server, args=(8008, 8008), daemon=True).start()
 threading.Thread(target=relay_server, args=(8009, 8009), daemon=True).start()
-threading.Thread(target=printer_heartbeat,  daemon=True).start()
 
 try:
     while True:
