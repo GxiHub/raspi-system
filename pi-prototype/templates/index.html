@@ -1212,7 +1212,7 @@ async function startProcess(ch, modeIdx) {
     setCardState(ch, true, mode.name, getModeColor(modeIdx));
     try {
         setStatus(ch, '下降中...', travelSec);
-        await post('/api/up', { channel: ch });
+        await post('/api/up', { channel: ch, travel_time: travelSec });
         await countdown(ch, travelSec);
 
         setStatus(ch, mode.name, cookSec);
@@ -1288,7 +1288,7 @@ async function setInduction(pwr) {
 async function motorOpen() {
     const txt = document.getElementById('motor-state-txt');
     if (txt) txt.textContent = '開啟中';
-    await post('/api/up', { channel: 1 });
+    await post('/api/up', { channel: 1, travel_time: getTravel() });
 }
 
 async function motorClose() {

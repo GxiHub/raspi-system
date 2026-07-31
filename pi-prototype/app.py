@@ -265,11 +265,28 @@ def temp_read():
 
 
 # ── 推桿操作 ──────────────────────────────────────────────────────────────────
-def actuator_extend(ch: int):
-    """推桿伸出（籃子下降入水）"""
+def _extend_worker(ch: int, travel_time: float):
+    """推桿伸出後自動全停（在背景執行緒執行）；軟體提早停，限位開關留著當備援"""
+    mapping = ACTUATOR_MAP.get(ch)
+    if not mapping:
+        return
+    ext_coil, ret_coil, addr = mapping
+    coil_write(addr, ret_coil, False)   # 先關縮回訊號（安全互鎖）
+    time.sleep(0.1)
+    coil_write(addr, ext_coil, True)    # 開伸出
+    time.sleep(travel_time)             # 軟體計時提早停，不再完全依賴限位開關
+    coil_write(addr, ext_coil, False)   # 全停
+
+
+def actuator_extend(ch: int, travel_time: float = None):
+    """推桿伸出（籃子下降入水）；有給 travel_time 則到時間自動停止（非阻塞），否則維持舊行為（靠限位開關停）"""
     mapping = ACTUATOR_MAP.get(ch)
     if not mapping:
         raise ValueError(f'推桿 {ch} 待接第二台繼電器模組')
+    if travel_time:
+        t = threading.Thread(target=_extend_worker, args=(ch, travel_time), daemon=True)
+        t.start()
+        return
     ext_coil, ret_coil, addr = mapping
     coil_write(addr, ret_coil, False)   # 先關縮回訊號（安全互鎖）
     time.sleep(0.1)
@@ -704,8 +721,9 @@ def api_induction():
 @app.route('/api/up', methods=['POST'])
 def api_up():
     ch = int(request.json.get('channel'))
+    travel_time = request.json.get('travel_time')
     try:
-        actuator_extend(ch)
+        actuator_extend(ch, travel_time)
         return jsonify({'status': 'ok'})
     except ValueError as e:
         return jsonify({'status': 'error', 'msg': str(e)}), 400
