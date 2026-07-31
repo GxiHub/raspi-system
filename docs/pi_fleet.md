@@ -1,6 +1,6 @@
 # Pi Fleet 總覽
 
-**最後更新：2026-06-30**
+**最後更新：2026-07-01**
 
 ## 機器清單
 
@@ -35,11 +35,8 @@
 
 ```
 raspi-system/
-├── pi52/noodle-app/
-│   ├── app.py              ← 共用後端（pi52/pi53/pi54 全用這一份）
-│   └── templates/          ← pi52 出單機前端
-│
-├── pi-prototype/           ← pi53/pi54 部署原型（以 pi54 為基底）
+├── pi-prototype/           ← 共用基底（三台共用）
+│   ├── app.py              ← 共用後端（pi52/pi53/pi54 全 symlink 指這裡）
 │   ├── deploy.sh           ← 一鍵部署腳本
 │   ├── noodle.service      ← User=__USER__ 佔位符
 │   ├── 99-rs485.rules
@@ -49,8 +46,9 @@ raspi-system/
 │   ├── autostart/kiosk.desktop
 │   └── templates/          ← 升降台 UI（index + orders + temp_curve + water_timer + printer_changelog）
 │
-├── pi53/                   ← pi53 機器備份
-├── pi54/                   ← pi54 機器備份
+├── pi52/                   ← pi52 專屬（proxy.py、出單機 templates、test_render.py）
+├── pi53/                   ← pi53 機器設定備份
+├── pi54/                   ← pi54 機器設定備份
 └── docs/                   ← 文件
 ```
 
@@ -90,6 +88,24 @@ ssh pi54-ts    # Tailscale 100.114.165.24
 ssh pi51-ts    # Tailscale 100.118.76.98（SSH key 未設定）
 ```
 
+## Git 操作規範
+
+**多台機器共用同一 repo，git 操作必須指定路徑，禁止 `git add -A`。**
+
+```bash
+# ✅ 正確：指定要提交的檔案
+git add pi-prototype/app.py
+git add pi52/proxy.py
+
+# ❌ 禁止：會掃入其他機器的本地修改，造成跨機汙染
+git add -A
+git add .
+```
+
+**原因**：pi52/pi53/pi54 各自 clone 同一份 repo，若在 pi54 執行 `git add -A`，
+會把 pi54 本地的修改（包括 pi53 相關路徑的變動）一起掃入，
+導致其他機器 pull 後 app.py 被覆蓋成空檔（2026-06-30 曾發生）。
+
 ## 已知問題與待辦
 
 詳見 GitHub Issues。
@@ -106,3 +122,4 @@ ssh pi51-ts    # Tailscale 100.118.76.98（SSH key 未設定）
 - 影響：pi53 noodle.service 啟動後 62ms 退出，kiosk 無法啟動
 - 修復：`git checkout HEAD -- pi52/noodle-app/app.py`
 - 教訓：應指定路徑 `git add <file>`，不用 `git add -A`
+

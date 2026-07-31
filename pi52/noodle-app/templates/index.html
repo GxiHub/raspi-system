@@ -153,12 +153,7 @@ input[type=range] {
 .motor-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .motor-btns button { min-height: 44px; padding: 0 16px; border-radius: 10px; border: none; font-size: 0.9em; cursor: pointer; font-weight: 600; }
 .btn-motor-fwd  { background: #00875a; color: #fff; }
-.btn-motor-rev  { background: #0066cc; color: #fff; }
 .btn-motor-stop { background: #c0392b; color: #fff; }
-.motor-speed-wrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.motor-speed-wrap label { font-size: 0.8em; color: var(--muted); }
-.motor-speed-wrap input[type=number] { width: 80px; min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--inner); color: var(--text); font-size: 1em; font-weight: 700; text-align: center; padding: 0 6px; }
-.btn-spd { min-height: 44px; width: 44px; border-radius: 8px; border: 1px solid var(--border); background: var(--inner); color: var(--text); font-size: 1em; font-weight: 700; cursor: pointer; }
 
 /* ── 推桿 Grid ── */
 .actuator-grid {
@@ -648,26 +643,13 @@ input[type=range] {
 <!-- ② 推桿 -->
 <div class="actuator-grid" id="act-grid"></div>
 
-<!-- ② 電機控制 -->
+<!-- ② 電機控制（測試用，暫接推桿1） -->
 <div class="motor-card" id="motor-card">
     <span class="motor-title">⚙️ 電機</span>
-    <span class="motor-status" id="motor-status">停止</span>
+    <span class="motor-status" id="motor-status">關閉</span>
     <div class="motor-btns">
-        <button class="btn-motor-fwd"  onclick="motorRun('fwd')">▲ 正轉</button>
-        <button class="btn-motor-rev"  onclick="motorRun('rev')">▼ 反轉</button>
-        <button class="btn-motor-stop" onclick="motorStop()">■ 停止</button>
-    </div>
-    <div class="motor-speed-wrap">
-        <label>速度</label>
-        <button class="btn-spd" onclick="motorSpeedAdj(-1)">－</button>
-        <input type="number" min="0" max="10000" step="1" value="24" id="motor-speed-input" oninput="motorSpeedChange(this.value)">
-        <button class="btn-spd" onclick="motorSpeedAdj(1)">＋</button>
-    </div>
-    <div class="motor-speed-wrap">
-        <label>加速(ms)</label>
-        <button class="btn-spd" onclick="motorAccelAdj(-50)">－</button>
-        <input type="number" min="0" max="65535" step="50" value="200" id="motor-accel-input" oninput="motorAccelChange(this.value)">
-        <button class="btn-spd" onclick="motorAccelAdj(50)">＋</button>
+        <button class="btn-motor-fwd"  onclick="motorOpen()">開</button>
+        <button class="btn-motor-stop" onclick="motorClose()">關</button>
     </div>
 </div>
 
@@ -986,66 +968,19 @@ async function loadAllSettings() {
     renderModeBtns();
 }
 
-// ── 電機控制 ────────────────────────────────────────────────────────────────
-let _motorSpeed = 24;
-
-async function motorRun(dir) {
-    await post('/api/motor/speed', { speed: _motorSpeed });
-    await post('/api/motor/run', { direction: dir });
+// ── 電機控制（測試用，暫接推桿1）───────────────────────────────────────────
+async function motorOpen() {
+    const status = document.getElementById('motor-status');
+    status.className = 'motor-status on';
+    status.innerText = '開啟中';
+    await post('/api/up', { channel: 1 });
 }
 
-async function motorStop() {
-    await post('/api/motor/stop', {});
-}
-
-function motorSpeedChange(val) {
-    _motorSpeed = Math.max(0, Math.min(10000, parseInt(val) || 0));
-    post('/api/motor/speed', { speed: _motorSpeed });
-}
-
-function motorSpeedAdj(delta) {
-    const input = document.getElementById('motor-speed-input');
-    _motorSpeed = Math.max(0, Math.min(10000, _motorSpeed + delta));
-    input.value = _motorSpeed;
-    post('/api/motor/speed', { speed: _motorSpeed });
-}
-
-let _motorAccel = 200;
-
-function motorAccelChange(val) {
-    _motorAccel = Math.max(0, Math.min(65535, parseInt(val) || 0));
-    post('/api/motor/accel', { accel: _motorAccel });
-}
-
-function motorAccelAdj(delta) {
-    const input = document.getElementById('motor-accel-input');
-    _motorAccel = Math.max(0, Math.min(65535, _motorAccel + delta));
-    input.value = _motorAccel;
-    post('/api/motor/accel', { accel: _motorAccel });
-}
-
-function updateMotorUI(motor) {
-    if (!motor) return;
-    const card       = document.getElementById('motor-card');
-    const status     = document.getElementById('motor-status');
-    const speedInput = document.getElementById('motor-speed-input');
-    const accelInput = document.getElementById('motor-accel-input');
-    card.classList.toggle('running', motor.running);
-    if (motor.running) {
-        status.className = 'motor-status on';
-        status.innerText = motor.dir === 'fwd' ? '▲ 正轉中' : '▼ 反轉中';
-    } else {
-        status.className = 'motor-status';
-        status.innerText = '停止';
-    }
-    if (document.activeElement !== speedInput) {
-        speedInput.value = motor.speed;
-        _motorSpeed = motor.speed;
-    }
-    if (document.activeElement !== accelInput) {
-        accelInput.value = motor.accel;
-        _motorAccel = motor.accel;
-    }
+async function motorClose() {
+    const status = document.getElementById('motor-status');
+    status.className = 'motor-status';
+    status.innerText = '關閉中';
+    await post('/api/down_and_off', { channel: 1, travel_time: getTravel() });
 }
 
 // ── 推桿操作 ────────────────────────────────────────────────────────────────
@@ -1327,8 +1262,6 @@ async function pollStatus() {
                 }
             });
         }
-
-        if (d.motor) updateMotorUI(d.motor);
 
     } catch(e) { /* 網路暫時中斷，忽略 */ }
 }

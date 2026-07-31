@@ -116,10 +116,6 @@ TCP_PORT     = 9100
 NETMASK      = bytes([0xff, 0xff, 0xff, 0x00])
 GATEWAY      = bytes([0xc0, 0xa8, 0x00, 0x01])
 
-# 2026-07-29: 平板改直連真印表機，pi52 不再介入平板路徑
-# （ENPC 探索 + TCP 9100/8008/8009 保留程式碼，暫不開放；POS 走 127.0.0.1:9200，不受此開關影響）
-TABLET_ACCESS_ENABLED = False
-
 holding_ip   = "0.0.0.0"
 holding_lock = threading.Lock()
 
@@ -294,10 +290,14 @@ def udp_send(data, addr):
         except Exception as e:
             print(f"[{ts()}][UDP] 送出失敗：{e}")
 
+
+_REAL_PRINTER_PAYLOAD = {
+    '03000001': b'\xa4\xd7<\xb3\n\xe4UB-E22\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05\x01\x03\x01TM-m30III\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+    '03000131': b'\xb9\x02\x96C\xb9\x02\xb9\xc2\xb9\x02\xb6C\xb9\x02\xb9\xc2\xb9\x02\x92C\xb9\x02\xb9\xc2\xb9\x02\xb6C\xb9\x02\xb9\xc2',
+}
+
 def handle_enpc(data, addr, sock):
     global holding_ip
-    if not TABLET_ACCESS_ENABLED:  # 平板連線已關閉，不回應任何探索封包
-        return
     if addr[0] == MY_IP:  # 忽略自己送出去的廣播（避免 UDP 無限迴圈）
         return
     if len(data) < 14 or data[:5] != b'EPSON':
@@ -346,10 +346,11 @@ def handle_enpc(data, addr, sock):
         udp_send(make_enpc('q', '03000010', pl), addr)
 
     elif func in ('03000001', '03000131'):
-        # 2026-07-02: 更新後的 UberEats app 會多送這兩個查詢，舊版 proxy 沒回應
-        # 導致平板判定「連接打印機時發生錯誤」。比照 03000016 回固定 OK。
-        udp_send(make_enpc("q", func, bytes(4)), addr)
-        print(f"[{ts()}][UDP] func={func} (OK) -> {addr[0]}")
+        # 2026-07-13 (proxy_v2): 改版 App 會實際解析這兩個查詢的內容，不是只檢查有無回應。
+        # 舊版回空殼在改版 App 上被判定為無效裝置。改成照抄真印表機 (192.168.1.124) 的原始 payload。
+        real_payload = _REAL_PRINTER_PAYLOAD[func]
+        udp_send(make_enpc("q", func, real_payload), addr)
+        print(f"[{ts()}][UDP] func={func} (real-payload {len(real_payload)}B) -> {addr[0]}")
 
     else:
         print(f"[{ts()}][UDP] 未知 ENPC func={func} 來自 {addr[0]} data={data[:20].hex()}")
@@ -376,8 +377,6 @@ BROADCAST_IP = "192.168.1.255"
 def broadcast_presence():
     """印表機連線成功後廣播，讓平板重新感知印表機上線（解決 proxy 重啟後平板不重連問題）"""
     def _do():
-        if not TABLET_ACCESS_ENABLED:  # 平板連線已關閉，不主動廣播上線
-            return
         # 等 UDP socket 就緒
         for _ in range(20):
             with _udp_sock_lock:
@@ -539,10 +538,6 @@ def tcp_9100():
     while True:
         try:
             conn, addr = s.accept()
-            if not TABLET_ACCESS_ENABLED:
-                print(f"[{ts()}][TCP] 平板連線已關閉，拒絕 {addr[0]}")
-                conn.close()
-                continue
             threading.Thread(target=handle_conn, args=(conn, addr), daemon=True).start()
         except Exception as e:
             print(f"[{ts()}][TCP] Accept 錯誤：{e}")
@@ -564,7 +559,7 @@ def printer_heartbeat():
 
 # ── 本機列印注入 port 9200 ──────────────────────────────────────────────────
 def local_print_server():
-    """127.0.0.1:9200 — 接收來自 Flask 的 ESC/POS 資料，臨時連上印表機送出（不常駐佔用）"""
+    """127.0.0.1:9200 — 接收來自 Flask 的 ESC/POS 資料，透過現有 printer socket 送出"""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(('127.0.0.1', 9200))
@@ -589,21 +584,17 @@ def _handle_local_print(conn):
         conn.close()
         if not buf:
             return
-
-        # 2026-07-29: POS 不再借用常駐連線，改成跟平板一樣臨時連上印表機、
-        # 印完馬上斷開，不長期佔用印表機的連線 slot
-        p = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        p.settimeout(10)
-        try:
-            p.connect((PRINTER_IP, PRINTER_PORT))
-            with _printer_send_lock:          # 防止多份收據 ESC @ 互 reset
-                p.sendall(bytes(buf))
-            print(f"[{ts()}][本機列印] 送出 {len(buf)} bytes（臨時連線，已送達即斷開）")
-        except Exception as e:
-            print(f"[{ts()}][本機列印] 送出失敗：{e}")
-        finally:
-            try: p.close()
-            except: pass
+        with _printer_lock:
+            p = _printer_sock[0]
+        if p:
+            try:
+                with _printer_send_lock:          # 防止多份收據 ESC @ 互 reset
+                    p.sendall(bytes(buf))
+                print(f"[{ts()}][本機列印] 送出 {len(buf)} bytes 透過現有連線")
+            except Exception as e:
+                print(f"[{ts()}][本機列印] 送出失敗：{e}")
+        else:
+            print(f"[{ts()}][本機列印] 印表機未連線，略過")
     except Exception as e:
         print(f"[{ts()}][本機列印] 錯誤：{e}")
 
@@ -647,10 +638,6 @@ def relay_server(local_port, remote_port):
     while True:
         try:
             conn, addr = s.accept()
-            if not TABLET_ACCESS_ENABLED:
-                print(f"[{ts()}][relay:{local_port}] 平板連線已關閉，拒絕 {addr[0]}")
-                conn.close()
-                continue
             threading.Thread(target=_handle_relay, args=(conn, addr, remote_port), daemon=True).start()
         except Exception as e:
             print(f"[{ts()}][relay:{local_port}] Accept 錯誤：{e}")
@@ -663,13 +650,13 @@ print(f"  Mac IP    : {MY_IP}")
 print(f"  印表機 IP : {PRINTER_IP}:{PRINTER_PORT}")
 print("=" * 50)
 
-# 2026-07-29: 不再常駐佔用印表機連線，POS 改成臨時連線列印（見 _handle_local_print）
-# printer_loop / printer_heartbeat 保留函式定義，暫不啟動
+threading.Thread(target=printer_loop, daemon=True).start()
 threading.Thread(target=udp_3289,     daemon=True).start()
 threading.Thread(target=tcp_9100,     daemon=True).start()
 threading.Thread(target=local_print_server, daemon=True).start()
 threading.Thread(target=relay_server, args=(8008, 8008), daemon=True).start()
 threading.Thread(target=relay_server, args=(8009, 8009), daemon=True).start()
+threading.Thread(target=printer_heartbeat,  daemon=True).start()
 
 try:
     while True:
