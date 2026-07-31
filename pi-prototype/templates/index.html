@@ -749,30 +749,6 @@ input[type=range] {
 }
 .motor-stat-label { font-size: 0.68em; color: var(--muted); margin-bottom: 3px; }
 .motor-stat-val   { font-size: 1.05em; font-weight: 700; font-family: monospace; }
-.motor-spd-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 14px;
-}
-.btn-motor-spd {
-    flex-shrink: 0;
-    width: 52px; height: 52px;
-    border-radius: 12px;
-    border: 2px solid var(--border);
-    background: var(--inner);
-    color: var(--text);
-    font-size: 1.5em; font-weight: 700;
-    cursor: pointer;
-    min-height: 44px;
-}
-.motor-spd-display {
-    flex: 1; text-align: center;
-    font-size: 1.6em; font-weight: 900; font-family: monospace;
-    background: var(--inner);
-    border-radius: 10px;
-    padding: 12px 0;
-}
 .motor-ctrl-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -790,82 +766,7 @@ input[type=range] {
 }
 .btn-motor:active { opacity: 0.75; }
 .btn-motor.fwd  { background: #1a73e8; color: #fff; }
-.btn-motor.rev  { background: #7c4dff; color: #fff; }
 .btn-motor.stp  { background: var(--disabled); color: var(--text); }
-.btn-motor.est  { background: #d32f2f; color: #fff; }
-.btn-motor-alarm {
-    width: 100%; padding: 12px;
-    border: none; border-radius: 10px;
-    background: var(--inner); color: var(--muted);
-    font-size: 0.85em; cursor: pointer; min-height: 44px;
-}
-.motor-section-title {
-    font-size: 0.72em; font-weight: 700; color: var(--muted);
-    text-transform: uppercase; letter-spacing: 0.05em;
-    margin: 14px 0 8px;
-}
-.motor-dir-row {
-    display: flex; gap: 8px; margin-bottom: 10px;
-}
-.btn-motor-dir {
-    flex: 1; padding: 10px;
-    border: 2px solid var(--border); border-radius: 10px;
-    background: var(--inner); color: var(--muted);
-    font-size: 0.9em; font-weight: 700; cursor: pointer; min-height: 44px;
-    transition: all 0.15s;
-}
-.btn-motor-dir.active-fwd { background: #1a73e8; border-color: #1a73e8; color: #fff; }
-.btn-motor-dir.active-rev { background: #7c4dff; border-color: #7c4dff; color: #fff; }
-.motor-angle-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 12px;
-}
-.btn-angle {
-    padding: 0; height: 52px;
-    border: 1.5px solid var(--border); border-radius: 10px;
-    background: var(--card); color: var(--text);
-    font-size: 0.88em; font-weight: 700; cursor: pointer;
-    transition: background 0.12s, transform 0.1s;
-}
-.btn-angle:active { background: var(--inner); transform: scale(0.96); }
-.motor-step-row {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 12px;
-}
-.btn-step {
-    height: 68px; border: none; border-radius: 12px;
-    font-size: 1.05em; font-weight: 800; cursor: pointer;
-    transition: filter 0.1s, transform 0.1s;
-}
-.btn-step.fwd { background: #1a73e8; color: #fff; }
-.btn-step.rev { background: #7c4dff; color: #fff; }
-.btn-step:active { filter: brightness(0.8); transform: scale(0.97); }
-.step-size-box {
-    display: flex; flex-direction: column; align-items: center; gap: 4px;
-}
-.step-size-btns { display: flex; gap: 4px; }
-.btn-step-adj {
-    width: 32px; height: 32px; border: 1.5px solid var(--border);
-    border-radius: 8px; background: var(--card); color: var(--text);
-    font-size: 1em; font-weight: 700; cursor: pointer;
-}
-.step-size-input {
-    width: 52px; height: 36px; border: 1.5px solid var(--border);
-    border-radius: 8px; background: var(--card); color: var(--text);
-    font-size: 1.05em; font-weight: 700; font-family: monospace;
-    text-align: center; -moz-appearance: textfield;
-}
-.step-size-input::-webkit-inner-spin-button,
-.step-size-input::-webkit-outer-spin-button { -webkit-appearance: none; }
-.step-size-val {
-    font-size: 1.1em; font-weight: 700; font-family: monospace;
-    color: var(--text);
-}
 </style>
 </head>
 <body>
@@ -1002,67 +903,13 @@ input[type=range] {
         <div class="motor-stat-row">
             <div class="motor-stat-item">
                 <div class="motor-stat-label">狀態</div>
-                <div class="motor-stat-val" id="motor-state-txt">停止</div>
+                <div class="motor-stat-val" id="motor-state-txt">關閉</div>
             </div>
-            <div class="motor-stat-item">
-                <div class="motor-stat-label">告警</div>
-                <div class="motor-stat-val" id="motor-alarm-txt">--</div>
-            </div>
-        </div>
-        <div class="motor-spd-row">
-            <button class="btn-motor-spd" onclick="motorSpdAdj(-50)">－</button>
-            <div class="motor-spd-display" id="motor-spd-disp">50</div>
-            <button class="btn-motor-spd" onclick="motorSpdAdj(+50)">＋</button>
         </div>
         <div class="motor-ctrl-grid">
-            <button class="btn-motor fwd" onclick="motorCmd('forward')">▲ 正轉</button>
-            <button class="btn-motor rev" onclick="motorCmd('reverse')">▼ 反轉</button>
-            <button class="btn-motor stp" onclick="motorCmd('stop')">■ 停止</button>
-            <button class="btn-motor est" onclick="motorCmd('estop')">⚠ 急停</button>
+            <button class="btn-motor fwd" onclick="motorOpen()">開</button>
+            <button class="btn-motor stp" onclick="motorClose()">關</button>
         </div>
-
-        <div class="motor-section-title">單步控制</div>
-        <div class="motor-step-row">
-            <button class="btn-step fwd" onclick="motorStep(true)">▲ 正轉</button>
-            <div class="step-size-box">
-                <div class="step-size-btns">
-                    <button class="btn-step-adj" onclick="motorStepAdj(-1)">－</button>
-                    <button class="btn-step-adj" onclick="motorStepAdj(+1)">＋</button>
-                </div>
-                <div style="display:flex;align-items:center;gap:3px;">
-                    <input class="step-size-input" id="motor-step-disp" type="text" inputmode="numeric" pattern="[0-9]*" value="5"
-                        onchange="motorStepInput(this.value)" oninput="motorStepInput(this.value)">
-                    <span style="font-size:0.95em;">°</span>
-                </div>
-            </div>
-            <button class="btn-step rev" onclick="motorStep(false)">▼ 反轉</button>
-        </div>
-        <div class="motor-section-title">角度控制</div>
-        <div class="cfg-item" onclick="openKp('motor_mpr','毫秒/圈')" style="margin-bottom:10px;">
-            <span class="cfg-label">毫秒/圈</span>
-            <span class="cfg-val" id="cfg-motor_mpr">5000</span>
-            <span style="font-size:0.7em"> ms</span>
-        </div>
-        <div class="motor-dir-row">
-            <button class="btn-motor-dir active-fwd" id="btn-dir-fwd" onclick="motorSetDir(true)">▲ 正轉方向</button>
-            <button class="btn-motor-dir" id="btn-dir-rev" onclick="motorSetDir(false)">▼ 反轉方向</button>
-        </div>
-        <div class="motor-angle-grid">
-            <button class="btn-angle" onclick="motorAngle(30)">30°</button>
-            <button class="btn-angle" onclick="motorAngle(60)">60°</button>
-            <button class="btn-angle" onclick="motorAngle(90)">90°</button>
-            <button class="btn-angle" onclick="motorAngle(120)">120°</button>
-            <button class="btn-angle" onclick="motorAngle(150)">150°</button>
-            <button class="btn-angle" onclick="motorAngle(180)">180°</button>
-            <button class="btn-angle" onclick="motorAngle(210)">210°</button>
-            <button class="btn-angle" onclick="motorAngle(240)">240°</button>
-            <button class="btn-angle" onclick="motorAngle(270)">270°</button>
-            <button class="btn-angle" onclick="motorAngle(300)">300°</button>
-            <button class="btn-angle" onclick="motorAngle(330)">330°</button>
-            <button class="btn-angle" onclick="motorAngle(360)">360°</button>
-        </div>
-
-        <button class="btn-motor-alarm" onclick="motorCmd('clear_alarm')">清告警</button>
     </div>
 </div>
 
@@ -1435,65 +1282,17 @@ async function setInduction(pwr) {
     await post('/api/induction', { power: pwr });
 }
 
-// ── 電機管理 ────────────────────────────────────────────────────────────────
-let motorSpeed   = 50;
-let motorForward = true;
-
-function motorSpdAdj(delta) {
-    motorSpeed = Math.max(10, Math.min(5000, motorSpeed + delta));
-    document.getElementById('motor-spd-disp').textContent = motorSpeed;
-}
-
-function motorSetDir(fwd) {
-    motorForward = fwd;
-    document.getElementById('btn-dir-fwd').className = 'btn-motor-dir' + (fwd  ? ' active-fwd' : '');
-    document.getElementById('btn-dir-rev').className = 'btn-motor-dir' + (!fwd ? ' active-rev' : '');
-}
-
-async function motorAngle(deg) {
-    await _motorPost({ action: 'angle', degrees: deg, forward: motorForward, speed: motorSpeed });
+// ── 電機管理（測試用，暫接推桿1）───────────────────────────────────────────
+async function motorOpen() {
     const txt = document.getElementById('motor-state-txt');
-    if (txt) txt.textContent = (motorForward ? '▲' : '▼') + ' ' + deg + '°';
+    if (txt) txt.textContent = '開啟中';
+    await post('/api/up', { channel: 1 });
 }
 
-let motorStepDeg = 5;
-let _stepCooldown = false;
-function motorStepAdj(delta) {
-    motorStepDeg = Math.max(1, Math.min(360, motorStepDeg + delta));
-    document.getElementById('motor-step-disp').value = motorStepDeg;
-}
-function motorStepInput(val) {
-    const v = Math.max(1, Math.min(360, parseInt(val) || 1));
-    motorStepDeg = v;
-}
-async function motorStep(fwd) {
-    if (_stepCooldown) return;
-    _stepCooldown = true;
-    await _motorPost({ action: 'angle', degrees: motorStepDeg, forward: fwd, speed: motorSpeed });
+async function motorClose() {
     const txt = document.getElementById('motor-state-txt');
-    if (txt) txt.textContent = (fwd ? '▲' : '▼') + ' ' + motorStepDeg + '°';
-    setTimeout(() => { _stepCooldown = false; }, 350);
-}
-
-async function motorCmd(action) {
-    const payload = { action };
-    if (action === 'forward' || action === 'reverse') payload.speed = motorSpeed;
-    await _motorPost(payload);
-    const stateMap = { forward:'正轉', reverse:'反轉', stop:'停止', estop:'急停', clear_alarm:'已清告警' };
-    const txt = document.getElementById('motor-state-txt');
-    if (txt) txt.textContent = stateMap[action] || action;
-    if (action === 'clear_alarm') {
-        const alarm = document.getElementById('motor-alarm-txt');
-        if (alarm) alarm.textContent = '正常';
-    }
-}
-
-async function _motorPost(payload) {
-    try {
-        return await post('/api/motor', payload);
-    } catch(e) {
-        console.error('motor error', e);
-    }
+    if (txt) txt.textContent = '關閉中';
+    await post('/api/down_and_off', { channel: 1, travel_time: getTravel() });
 }
 
 // ── 自動溫控 ────────────────────────────────────────────────────────────────
@@ -1594,13 +1393,6 @@ function kpOk() {
         return;
     }
 
-    // 電機毫秒/圈
-    if (kpTarget === 'motor_mpr') {
-        const v = Math.max(100, val);
-        document.getElementById('cfg-motor_mpr').textContent = v;
-        post('/api/motor', { action: 'set_mpr', mpr: v });
-        return;
-    }
 
     // 自動溫控設定
     const cfgKeys = ['pwr_low','pwr_high','pwr_keep','temp_boost','temp_keep','temp_reheat'];
