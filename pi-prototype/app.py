@@ -176,6 +176,12 @@ def induction_set(pwr: int):
     """設定電磁爐功率 0~100%"""
     global induction_pwr
     pwr  = max(0, min(70, int(pwr)))   # 最高 70%
+    if pwr > 0 and pwr > induction_pwr and induction_pwr > 0:
+        # 加熱中直接跳更高功率容易觸發電磁爐保護性故障（E13），先歸零讓它降下來再設新值
+        zero = bytes([INDUCTION_ADDR, 0x06, 0x10, 0x00, 0x00, 0])
+        with serial_lock:
+            _send(zero)
+        time.sleep(0.3)
     data = bytes([INDUCTION_ADDR, 0x06, 0x10, 0x00, 0x00, pwr])
     with serial_lock:
         _send(data)
