@@ -27,6 +27,21 @@
   .state-heating { color: #e67e22; font-weight: bold; }
   .state-idle { color: #888; }
 
+  .rec-btn {
+    display: inline-block;
+    min-height: 44px;
+    padding: 0 18px;
+    border: none;
+    border-radius: 22px;
+    font-weight: 700;
+    font-size: 0.95em;
+    cursor: pointer;
+    margin-bottom: 14px;
+    transition: background 0.15s;
+  }
+  .rec-btn.off { background: #e2e2e2; color: #555; }
+  .rec-btn.on  { background: #2e9e4c; color: #fff; }
+
   .table-wrap {
     background: #fff;
     border-radius: 10px;
@@ -75,6 +90,7 @@
 <div class="wrap">
   <h1>加熱即時記錄</h1>
   <div id="status-line">狀態：<b id="cur-state">--</b>　每 15 秒記一筆</div>
+  <button id="rec-toggle" class="rec-btn off">▶ 開始記錄</button>
 
   <div class="table-wrap">
     <table>
@@ -90,7 +106,7 @@
       </thead>
       <tbody id="log-body"></tbody>
     </table>
-    <div id="empty-hint">尚無資料，15 秒後顯示第一筆</div>
+    <div id="empty-hint">按上面「開始記錄」後，每 15 秒顯示一筆</div>
   </div>
 </div>
 
@@ -99,10 +115,17 @@ const body      = document.getElementById('log-body');
 const emptyHint = document.getElementById('empty-hint');
 const stateEl   = document.getElementById('cur-state');
 const scroller  = document.querySelector('.table-wrap');
+const recToggle = document.getElementById('rec-toggle');
+
+function formatTs(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+         ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
 
 async function pollOnce() {
   const now = new Date();
-  const t = now.toLocaleTimeString('zh-TW', { hour12: false });
+  const t = formatTs(now);
 
   let d;
   try {
@@ -140,8 +163,25 @@ async function pollOnce() {
   stateEl.className = (d.induction_pwr > 0) ? 'state-heating' : 'state-idle';
 }
 
-pollOnce();
-setInterval(pollOnce, 15000);
+let recording = false;
+let timerId   = null;
+
+function setRecording(on) {
+  recording = on;
+  if (on) {
+    recToggle.textContent = '⏸ 停止記錄';
+    recToggle.className = 'rec-btn on';
+    pollOnce();
+    timerId = setInterval(pollOnce, 15000);
+  } else {
+    recToggle.textContent = '▶ 開始記錄';
+    recToggle.className = 'rec-btn off';
+    if (timerId) clearInterval(timerId);
+    timerId = null;
+  }
+}
+
+recToggle.addEventListener('click', () => setRecording(!recording));
 </script>
 </body>
 </html>
