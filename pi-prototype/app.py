@@ -101,6 +101,13 @@ _stop_count   = 0               # 連續偵測到「有命令但報錯」次數
 _igbt_high_count = 0            # 連續偵測到 IGBT 過高的次數（防抖動）
 _was_auto_on  = False           # 追蹤 auto_temp 狀態變化以自動管理 session
 
+# ── E13 自動復原 ──────────────────────────────────────────────────────────────
+E13_COOLDOWN     = 5     # 關閉後等幾秒再恢復原功率
+E13_MAX_RETRY    = 3     # 時間窗口內最多自動恢復次數，避免反覆跳錯時無限重試
+E13_RETRY_WINDOW = 600   # 重試次數計算窗口（秒）
+_e13_recover_count       = 0
+_e13_recover_window_start = 0.0
+
 
 # ── 溫度曲線記錄 ──────────────────────────────────────────────────────────────
 TEMP_LOG_MAX = 1800          # 最多保留 1800 筆（@2s = 1 小時）
@@ -329,8 +336,20 @@ def _relay_probe_loop():
 
 threading.Thread(target=_relay_probe_loop, daemon=True).start()
 
+def _e13_auto_recover(resume_pwr: int, attempt: int):
+    """E13 故障後：先關閉、冷卻幾秒、再恢復故障前的功率"""
+    induction_set(0)
+    _log_event('e13_recover',
+               f'E13 自動處理：已關閉，{E13_COOLDOWN}秒後恢復至 {resume_pwr}%（第{attempt}次）',
+               level='warn')
+    time.sleep(E13_COOLDOWN)
+    induction_set(resume_pwr)
+    _push_alert('warn', f'⚠️ E13 已自動關閉並恢復加熱 {resume_pwr}%（第{attempt}次）')
+
+
 def _induction_monitor_loop():
     global _prev_error, _igbt_warned, _stop_count, _igbt_high_count, induction_pwr
+    global _e13_recover_count, _e13_recover_window_start
     while True:
         try:
             induction_read_status()
@@ -340,9 +359,27 @@ def _induction_monitor_loop():
             if induction_error is not None:
                 if induction_error != 0 and induction_error != _prev_error:
                     desc = f'E{induction_error:02X}'
+                    resume_pwr = induction_pwr
                     _log_event('fault', f'電磁爐故障代碼 {desc}，已自動清除命令功率', level='critical')
                     _push_alert('critical', f'🚨 電磁爐故障: {desc}')
                     induction_pwr = 0
+
+                    if induction_error == 0x13 and resume_pwr > 0:
+                        now = time.time()
+                        if now - _e13_recover_window_start > E13_RETRY_WINDOW:
+                            _e13_recover_window_start = now
+                            _e13_recover_count = 0
+                        if _e13_recover_count < E13_MAX_RETRY:
+                            _e13_recover_count += 1
+                            threading.Thread(target=_e13_auto_recover,
+                                              args=(resume_pwr, _e13_recover_count),
+                                              daemon=True).start()
+                        else:
+                            _log_event('e13_giveup',
+                                       f'E13 在 {E13_RETRY_WINDOW // 60} 分鐘內已重試 {E13_MAX_RETRY} 次，'
+                                       f'停止自動恢復，需人工檢查',
+                                       level='critical')
+                            _push_alert('critical', '🛑 E13 重試已達上限，需人工檢查')
                 elif induction_error == 0 and _prev_error != 0:
                     _log_event('recovered', f'故障解除（E{_prev_error:02X} → 0）', level='info')
                     _push_alert('info', f'✅ 故障解除')
