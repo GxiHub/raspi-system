@@ -121,13 +121,40 @@ input[type=range] {
 .auto-cfg {
     display: flex;
     flex-wrap: wrap;
-    gap: clamp(12px, 1.6vw, 28px);
+    gap: clamp(8px, 1vw, 16px);
 }
 .auto-cfg .time-box {
     flex: 1;
-    min-width: clamp(140px, 14vw, 220px);
-    position: relative;
+    min-width: clamp(90px, 9vw, 140px);
+    gap: clamp(4px, .6vw, 10px);
+    padding: clamp(10px, 1.4vw, 20px) clamp(6px, 1vw, 14px) clamp(10px, 1.4vw, 18px);
 }
+#temp-cfg-grid .ao-dial { width: clamp(64px, 6vw, 100px); height: clamp(64px, 6vw, 100px); }
+#temp-cfg-grid .ao-sec { font-size: clamp(1em, 1.6vw, 1.5em); }
+#temp-cfg-grid .ao-name { font-size: clamp(.8em, 1.05vw, 1.05em); }
+
+.temp-section { display: flex; flex-direction: column; gap: .3em; }
+.temp-section-label {
+    font-size: clamp(.72em, 1vw, .95em);
+    font-weight: 700;
+    letter-spacing: .05em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin: 4px 0 2px;
+}
+.monitor-row { display: flex; gap: clamp(8px, 1vw, 16px); flex-wrap: wrap; }
+.mon-item {
+    flex: 1;
+    min-width: clamp(90px, 9vw, 140px);
+    background: var(--inner);
+    border-radius: 12px;
+    padding: clamp(10px, 1.2vw, 18px) clamp(8px, 1vw, 14px);
+    text-align: center;
+}
+.mon-item .mon-label { font-size: clamp(.68em, .95vw, .95em); color: var(--muted); margin-bottom: .3em; }
+.mon-item .mon-value { font-size: clamp(1.05em, 1.6vw, 1.6em); font-weight: 700; font-family: monospace; color: var(--text); }
+.mon-item .mon-unit  { font-size: clamp(.68em, .9vw, .9em); color: var(--muted); }
+.mon-item.hero .mon-value { font-size: clamp(1.6em, 2.6vw, 2.6em); color: var(--yellow); }
 
 /* ── 推桿 Grid ── */
 .actuator-grid {
@@ -265,7 +292,6 @@ input[type=range] {
     min-width: clamp(140px, 14vw, 220px);
     position: relative;
 }
-.mgmt-sheet--wide { max-width: min(70vw, 1300px); }
 
 /* ── 新增模式 Modal ── */
 #add-mode-modal {
@@ -725,6 +751,7 @@ input[type=range] {
     overflow-x: hidden;
     box-shadow: 0 24px 56px -20px rgba(20,24,32,.45);
 }
+.mgmt-sheet--wide { max-width: min(70vw, 1300px); }
 .mgmt-sheet-title {
     font-size: clamp(1em, 1.6vw, 1.6em);
     font-weight: 700;
@@ -843,42 +870,49 @@ input[type=range] {
             <button class="toggle-btn" id="auto-btn" onclick="toggleAutoTemp()">OFF</button>
             <span id="auto-status" style="font-size:0.8em;color:var(--muted);">手動模式</span>
         </div>
-        <div class="auto-cfg" id="temp-cfg-grid" style="margin-bottom:16px;"></div>
-        <div class="top-panel" style="margin:0;">
-            <div class="temp-block">
-                <div class="temp-label">目前溫度</div>
-                <div class="temp-value" id="temp-val">--</div>
-                <div class="temp-unit">°C</div>
-            </div>
-            <div class="induction-block">
-                <h3>🔥 電磁爐控制</h3>
-                <span class="pwr-display" id="pwr-val">0%</span>
-                <div style="display:flex;gap:6px;margin-bottom:8px;">
-                    <div style="flex:1;background:var(--inner);border-radius:8px;padding:5px 8px;text-align:center;">
-                        <div style="font-size:0.62em;color:var(--muted);">IGBT 溫度</div>
-                        <div style="font-size:0.95em;font-weight:700;color:#00b894;font-family:monospace;" id="igbt-val">--°C</div>
-                    </div>
-                    <div style="flex:1;background:var(--inner);border-radius:8px;padding:5px 8px;text-align:center;">
-                        <div style="font-size:0.62em;color:var(--muted);">回讀功率</div>
-                        <div style="font-size:0.95em;font-weight:700;color:var(--yellow);font-family:monospace;" id="ind-actual-pwr">--%</div>
-                    </div>
-                    <div style="flex:1;background:var(--inner);border-radius:8px;padding:5px 8px;text-align:center;">
-                        <div style="font-size:0.62em;color:var(--muted);">錯誤碼</div>
-                        <div style="font-size:0.95em;font-weight:700;font-family:monospace;" id="ind-err-val">--</div>
-                    </div>
+        <div class="temp-section">
+            <p class="temp-section-label">閾值設定</p>
+            <div class="auto-cfg" id="temp-cfg-grid"></div>
+        </div>
+
+        <div class="temp-section">
+            <p class="temp-section-label">即時監控</p>
+            <div class="monitor-row">
+                <div class="mon-item hero">
+                    <div class="mon-label">目前溫度</div>
+                    <div class="mon-value" id="temp-val">--</div>
+                    <div class="mon-unit">°C</div>
                 </div>
-                <div class="pwr-btns" id="pwr-btns">
-                    <button onclick="setInduction(0)">關閉</button>
-                    <button onclick="setInduction(43)">43%</button>
-                    <button onclick="setInduction(46)">46%</button>
-                    <button onclick="setInduction(50)">50%</button>
-                    <button onclick="setInduction(52)">52%</button>
-                    <button onclick="setInduction(54)">54%</button>
-                    <button onclick="setInduction(56)">56%</button>
+                <div class="mon-item">
+                    <div class="mon-label">電磁爐</div>
+                    <div class="mon-value" id="pwr-val">0%</div>
                 </div>
-                <input type="range" id="pwr-slider" min="0" max="56" value="0"
-                       onchange="setInduction(this.value)">
+                <div class="mon-item">
+                    <div class="mon-label">IGBT 溫度</div>
+                    <div class="mon-value" id="igbt-val" style="color:#00b894;">--°C</div>
+                </div>
+                <div class="mon-item">
+                    <div class="mon-label">回讀功率</div>
+                    <div class="mon-value" id="ind-actual-pwr" style="color:var(--yellow);">--%</div>
+                </div>
+                <div class="mon-item">
+                    <div class="mon-label">錯誤碼</div>
+                    <div class="mon-value" id="ind-err-val">--</div>
+                </div>
             </div>
+        </div>
+
+        <div class="temp-section">
+            <p class="temp-section-label">手動功率</p>
+            <div class="pwr-btns" id="pwr-btns">
+                <button onclick="setInduction(43)">43%</button>
+                <button onclick="setInduction(48)">48%</button>
+                <button onclick="setInduction(52)">52%</button>
+                <button onclick="setInduction(55)">55%</button>
+                <button onclick="setInduction(0)">關閉</button>
+            </div>
+            <input type="range" id="pwr-slider" min="0" max="55" value="0"
+                   onchange="setInduction(this.value)">
         </div>
     </div>
 </div>
