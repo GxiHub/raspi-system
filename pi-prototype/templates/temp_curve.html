@@ -35,29 +35,46 @@
     border-radius: 22px;
     font-weight: 700;
     font-size: 0.95em;
+    white-space: nowrap;
     cursor: pointer;
-    margin-bottom: 14px;
     transition: background 0.15s;
+    flex-shrink: 0;
   }
   .rec-btn.off { background: #e2e2e2; color: #555; }
   .rec-btn.on  { background: #2e9e4c; color: #fff; }
   .rec-btn:disabled { opacity: 0.6; cursor: default; }
 
-  h2 {
-    font-size: 1.05em;
-    margin: 26px 0 10px;
-    color: #333;
-  }
-  .query-box {
+  .control-row {
     display: flex;
-    gap: 8px;
     align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
     margin-bottom: 14px;
+  }
+  .query-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
     flex-wrap: wrap;
   }
-  .query-box input[type=date] {
+  .query-label {
+    color: #333;
+    font-size: 0.95em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .query-inputs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex: 1;
-    min-width: 150px;
+    min-width: 0;
+  }
+  .query-inputs input[type=date] {
+    flex: 1;
+    min-width: 140px;
     min-height: 44px;
     padding: 0 10px;
     border: 1px solid #d5d5d5;
@@ -109,6 +126,8 @@
     body { padding: 10px; }
     table { font-size: 0.88em; min-width: 420px; }
     thead th, tbody td { padding: 8px 6px; }
+    .query-group { flex-basis: 100%; flex-direction: column; align-items: stretch; }
+    .control-row .rec-btn { flex: 1; text-align: center; }
   }
 </style>
 </head>
@@ -116,7 +135,17 @@
 <div class="wrap">
   <h1>加熱即時記錄</h1>
   <div id="status-line">狀態：<b id="cur-state">--</b>　每 15 秒記一筆</div>
-  <button id="rec-toggle" class="rec-btn off">▶ 開始記錄</button>
+
+  <div class="control-row">
+    <div class="query-group">
+      <span class="query-label">按日期查詢歷史紀錄</span>
+      <div class="query-inputs">
+        <input type="date" id="query-date">
+        <button id="query-btn" class="rec-btn off">🔍 查詢</button>
+      </div>
+    </div>
+    <button id="rec-toggle" class="rec-btn off">▶ 開始記錄</button>
+  </div>
 
   <div class="table-wrap">
     <table>
@@ -135,11 +164,6 @@
     <div id="empty-hint">按上面「開始記錄」後，每 15 秒顯示一筆</div>
   </div>
 
-  <h2>按日期查詢歷史紀錄</h2>
-  <div class="query-box">
-    <input type="date" id="query-date">
-    <button id="query-btn" class="rec-btn off">🔍 查詢</button>
-  </div>
   <div class="table-wrap" id="query-wrap" style="display:none;">
     <table>
       <thead>
