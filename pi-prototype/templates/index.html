@@ -120,22 +120,14 @@ input[type=range] {
 .toggle-btn.on { background: var(--green); color: white; }
 .auto-cfg {
     display: flex;
-    gap: 8px;
     flex-wrap: wrap;
+    gap: clamp(12px, 1.6vw, 28px);
 }
-.cfg-item {
-    background: var(--inner);
-    border-radius: 8px;
-    padding: 8px 12px;
-    text-align: center;
-    cursor: pointer;
+.auto-cfg .time-box {
     flex: 1;
-    min-width: 80px;
-    transition: 0.15s;
+    min-width: clamp(140px, 14vw, 220px);
+    position: relative;
 }
-.cfg-item:hover { border: 1px solid var(--border); }
-.cfg-label { font-size: 0.7em; color: var(--muted); display: block; margin-bottom: 2px; }
-.cfg-val   { font-size: 1.1em; font-weight: 700; color: var(--yellow); }
 
 /* ── 推桿 Grid ── */
 .actuator-grid {
@@ -313,39 +305,40 @@ input[type=range] {
     margin-bottom: 10px;
     flex-wrap: wrap;
 }
-.health-header h3 { font-size: 0.9em; color: var(--muted); flex: 1; }
-.uptime-txt { font-size: 0.75em; color: var(--muted); }
+.health-header h3 { font-size: clamp(0.9em, 1.3vw, 1.3em); color: var(--muted); flex: 1; }
+.uptime-txt { font-size: clamp(0.75em, 1.1vw, 1.1em); color: var(--muted); }
 .btn-diag {
-    padding: 7px 16px;
+    padding: clamp(7px, 1vw, 16px) clamp(16px, 1.8vw, 28px);
     border: none;
     border-radius: 20px;
     background: var(--border);
     color: var(--text);
-    font-size: 0.85em;
+    font-size: clamp(0.85em, 1.2vw, 1.2em);
     font-weight: 700;
     cursor: pointer;
     transition: 0.2s;
+    min-height: 44px;
 }
 .btn-diag:hover { background: #3d6fa8; }
 .btn-diag.running { opacity: 0.6; pointer-events: none; }
 .device-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    gap: clamp(8px, 1.2vw, 20px);
 }
 @media (min-width: 500px) {
-    .device-grid { grid-template-columns: repeat(4, 1fr); }
+    .device-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 }
 .device-item {
     background: var(--inner);
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: clamp(10px, 1.4vw, 22px) clamp(12px, 1.6vw, 24px);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: clamp(8px, 1vw, 16px);
 }
 .dot {
-    width: 10px; height: 10px;
+    width: clamp(10px, 1vw, 16px); height: clamp(10px, 1vw, 16px);
     border-radius: 50%;
     background: var(--muted);
     flex-shrink: 0;
@@ -353,9 +346,9 @@ input[type=range] {
 .dot.ok  { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .dot.err { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
 .device-info { min-width: 0; }
-.device-name  { font-size: 0.75em; color: var(--text); font-weight: 700; }
-.device-addr  { font-size: 0.65em; color: var(--muted); }
-.device-value { font-size: 0.7em; color: var(--yellow); }
+.device-name  { font-size: clamp(0.75em, 1.1vw, 1.15em); color: var(--text); font-weight: 700; }
+.device-addr  { font-size: clamp(0.65em, 0.95vw, 1em); color: var(--muted); }
+.device-value { font-size: clamp(0.7em, 1vw, 1.05em); color: var(--yellow); }
 
 /* ── 確認 Modal ── */
 #confirm-modal {
@@ -731,23 +724,24 @@ input[type=range] {
     overflow-x: hidden;
 }
 .mgmt-sheet-title {
-    font-size: 1em;
+    font-size: clamp(1em, 1.6vw, 1.6em);
     font-weight: 700;
     color: var(--muted);
-    margin-bottom: 16px;
+    margin-bottom: clamp(16px, 2vw, 32px);
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 .btn-mgmt-close {
-    padding: 8px 18px;
+    padding: clamp(8px, 1vw, 18px) clamp(18px, 2vw, 32px);
     border: none;
     border-radius: 20px;
     background: var(--disabled);
     color: var(--muted);
-    font-size: 0.85em;
+    font-size: clamp(0.85em, 1.2vw, 1.2em);
     font-weight: 700;
     cursor: pointer;
+    min-height: 44px;
 }
 
 /* ── 電機管理 Sheet ── */
@@ -813,7 +807,7 @@ input[type=range] {
 
 <!-- 系統管理 Sheet -->
 <div class="mgmt-overlay" id="mgmt-system" onclick="bgCloseMgmt(event,'system')">
-    <div class="mgmt-sheet">
+    <div class="mgmt-sheet mgmt-sheet--wide">
         <div class="mgmt-sheet-title">
             <span>🔌 系統管理</span>
             <button class="btn-mgmt-close" onclick="closeMgmt('system')">關閉</button>
@@ -836,7 +830,7 @@ input[type=range] {
 
 <!-- 溫控管理 Sheet -->
 <div class="mgmt-overlay" id="mgmt-temp" onclick="bgCloseMgmt(event,'temp')">
-    <div class="mgmt-sheet">
+    <div class="mgmt-sheet mgmt-sheet--wide">
         <div class="mgmt-sheet-title">
             <span>🌡️ 溫控管理</span>
             <button class="btn-mgmt-close" onclick="closeMgmt('temp')">關閉</button>
@@ -846,32 +840,7 @@ input[type=range] {
             <button class="toggle-btn" id="auto-btn" onclick="toggleAutoTemp()">OFF</button>
             <span id="auto-status" style="font-size:0.8em;color:var(--muted);">手動模式</span>
         </div>
-        <div class="auto-cfg" style="margin-bottom:16px;">
-            <div class="cfg-item" onclick="openKp('pwr_low','加熱功率(%)')">
-                <span class="cfg-label">加熱功率</span>
-                <span class="cfg-val" id="cfg-pwr_low">65</span><span style="font-size:0.7em">%</span>
-            </div>
-            <div class="cfg-item" onclick="openKp('pwr_high','衝刺功率(%)')">
-                <span class="cfg-label">衝刺功率</span>
-                <span class="cfg-val" id="cfg-pwr_high">70</span><span style="font-size:0.7em">%</span>
-            </div>
-            <div class="cfg-item" onclick="openKp('pwr_keep','保溫功率(%)')">
-                <span class="cfg-label">保溫功率</span>
-                <span class="cfg-val" id="cfg-pwr_keep">40</span><span style="font-size:0.7em">%</span>
-            </div>
-            <div class="cfg-item" onclick="openKp('temp_boost','衝刺起點(°C)')">
-                <span class="cfg-label">衝刺起點</span>
-                <span class="cfg-val" id="cfg-temp_boost">89</span><span style="font-size:0.7em">°C</span>
-            </div>
-            <div class="cfg-item" onclick="openKp('temp_keep','保溫起點(°C)')">
-                <span class="cfg-label">保溫起點</span>
-                <span class="cfg-val" id="cfg-temp_keep">100</span><span style="font-size:0.7em">°C</span>
-            </div>
-            <div class="cfg-item" onclick="openKp('temp_reheat','補熱閾值(°C)')">
-                <span class="cfg-label">補熱閾值</span>
-                <span class="cfg-val" id="cfg-temp_reheat">93</span><span style="font-size:0.7em">°C</span>
-            </div>
-        </div>
+        <div class="auto-cfg" id="temp-cfg-grid" style="margin-bottom:16px;"></div>
         <div class="top-panel" style="margin:0;">
             <div class="temp-block">
                 <div class="temp-label">目前溫度</div>
@@ -1022,33 +991,42 @@ const getActionModes = () => modes.filter(m => !m.isTravel);
 const MODE_COLORS = ['#e67e22','#27ae60','#2980b9','#922b21','#16a085','#8e44ad','#d35400','#1abc9c'];
 const getModeColor = i => MODE_COLORS[i % MODE_COLORS.length];
 
-// ── 渲染全域時間設定列 ──────────────────────────────────────────────────────
+// ── 共用錶盤元件（動作選單／動作管理／溫控管理都用同一份） ──────────────────
+const DIAL_C = 314.16; // 2 * PI * r(50)
+function dialHTML(val, unit, color, ratio, id) {
+    const offset = (DIAL_C * (1 - Math.min(Math.max(ratio, 0), 1))).toFixed(2);
+    const idAttr = id ? ` id="${id}"` : '';
+    return `
+        <div class="ao-dial">
+            <svg viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
+                <circle cx="60" cy="60" r="50" fill="none" stroke="${color}" stroke-width="10"
+                        stroke-linecap="round" stroke-dasharray="${DIAL_C}" stroke-dashoffset="${offset}"/>
+            </svg>
+            <div class="ao-dial-center">
+                <span class="ao-sec"${idAttr}>${val}</span>
+                <span class="ao-sec-unit">${unit}</span>
+            </div>
+        </div>`;
+}
+
+// ── 渲染全域時間設定列（自訂秒數不列在這裡，只在動作選單出現） ──────────────
 function renderTimeConfig() {
     const g = document.getElementById('time-config-grid');
-    const DIAL_C = 314.16; // 2 * PI * r(50)
-    const maxSec = Math.max(...modes.map(m => m.sec), 1);
+    const visible = modes.filter(m => !m.isCustom);
+    const maxSec = Math.max(...visible.map(m => m.sec), 1);
     let ai = 0;
-    g.innerHTML = modes.map((m, i) => {
+    g.innerHTML = visible.map(m => {
+        const i      = modes.indexOf(m);
         const color  = m.isTravel ? null : getModeColor(ai++);
         const ring   = color || 'var(--muted)';
-        const ratio  = Math.min(m.sec / maxSec, 1);
-        const offset = (DIAL_C * (1 - ratio)).toFixed(2);
+        const ratio  = m.sec / maxSec;
         return `
         <div class="time-box"
             onclick="openKp('mode-${i}','${m.name}秒數')"
             ontouchstart="lpStart(event,${i})" ontouchend="lpEnd()" ontouchmove="lpEnd()"
             onmousedown="lpStart(event,${i})" onmouseup="lpEnd()" onmouseleave="lpEnd()">
-            <div class="ao-dial">
-                <svg viewBox="0 0 120 120">
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="${ring}" stroke-width="10"
-                            stroke-linecap="round" stroke-dasharray="${DIAL_C}" stroke-dashoffset="${offset}"/>
-                </svg>
-                <div class="ao-dial-center">
-                    <span class="ao-sec" id="msec-${i}">${m.sec}</span>
-                    <span class="ao-sec-unit">秒</span>
-                </div>
-            </div>
+            ${dialHTML(m.sec, '秒', ring, ratio, `msec-${i}`)}
             <span class="ao-name">${m.name}</span>
         </div>`;
     }).join('');
@@ -1195,27 +1173,15 @@ function openActionOverlay(ch) {
     _overlayChannel = ch;
     document.getElementById('ao-title').innerText = `推桿 ${ch} — 選擇動作`;
     const am = getActionModes();
-    const DIAL_C = 314.16; // 2 * PI * r(50)
     const maxSec = Math.max(...am.map(m => m.sec), 1);
     document.getElementById('ao-modes').innerHTML = am.map((m, i) => {
-        const ratio   = Math.min(m.sec / maxSec, 1);
-        const offset  = (DIAL_C * (1 - ratio)).toFixed(2);
+        const ratio   = m.sec / maxSec;
         const color   = getModeColor(i);
         const rawIdx  = modes.indexOf(m);
         const handler = m.isCustom ? `selectCustomAction(${i}, ${rawIdx})` : `selectAction(${i})`;
         return `
         <button class="ao-btn" onclick="${handler}">
-            <div class="ao-dial">
-                <svg viewBox="0 0 120 120">
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="${color}" stroke-width="10"
-                            stroke-linecap="round" stroke-dasharray="${DIAL_C}" stroke-dashoffset="${offset}"/>
-                </svg>
-                <div class="ao-dial-center">
-                    <span class="ao-sec">${m.sec}</span>
-                    <span class="ao-sec-unit">${m.isCustom ? '上次' : '秒'}</span>
-                </div>
-            </div>
+            ${dialHTML(m.sec, m.isCustom ? '上次' : '秒', color, ratio)}
             <span class="ao-name">${m.name}</span>
         </button>`;
     }).join('');
@@ -1393,10 +1359,36 @@ function updateAutoUI() {
     document.getElementById('pwr-slider').disabled = autoOn;
 }
 
+const CFG_META = {
+    pwr_low:     { label: '加熱功率', unit: '%',  max: 100 },
+    pwr_high:    { label: '衝刺功率', unit: '%',  max: 100 },
+    pwr_keep:    { label: '保溫功率', unit: '%',  max: 100 },
+    temp_boost:  { label: '衝刺起點', unit: '°C', max: 150 },
+    temp_keep:   { label: '保溫起點', unit: '°C', max: 150 },
+    temp_reheat: { label: '補熱閾值', unit: '°C', max: 150 },
+};
+let cfgValues = { pwr_low: 65, pwr_high: 70, pwr_keep: 40, temp_boost: 89, temp_keep: 100, temp_reheat: 93 };
+
+function renderTempCfgGrid() {
+    const g = document.getElementById('temp-cfg-grid');
+    if (!g) return;
+    g.innerHTML = Object.keys(CFG_META).map(key => {
+        const meta  = CFG_META[key];
+        const val   = cfgValues[key];
+        const ratio = val / meta.max;
+        return `
+        <div class="time-box" onclick="openKp('${key}','${meta.label}(${meta.unit})')">
+            ${dialHTML(val, meta.unit, 'var(--yellow)', ratio, `cfg-${key}`)}
+            <span class="ao-name">${meta.label}</span>
+        </div>`;
+    }).join('');
+}
+
 async function updateCfg(key, val) {
     const payload = { [key]: val };
     await post('/api/auto_temp', payload);
-    document.getElementById(`cfg-${key}`).innerText = val;
+    cfgValues[key] = val;
+    renderTempCfgGrid();
 }
 
 // ── 風扇 ────────────────────────────────────────────────────────────────────
@@ -1482,8 +1474,7 @@ function kpOk() {
 // 點鍵盤外關閉
 document.addEventListener('click', e => {
     if (!document.getElementById('keypad').contains(e.target) &&
-        !e.target.closest('.time-box') &&
-        !e.target.closest('.cfg-item')) {
+        !e.target.closest('.time-box')) {
         document.getElementById('keypad').classList.remove('show');
     }
 });
@@ -1537,10 +1528,14 @@ async function pollStatus() {
 
         // 自動溫控設定值同步
         if (d.auto_cfg) {
-            ['pwr_low','pwr_high','pwr_keep','temp_boost','temp_keep','temp_reheat'].forEach(k => {
-                const el = document.getElementById('cfg-' + k);
-                if (el && d.auto_cfg[k] !== undefined) el.innerText = d.auto_cfg[k];
+            let cfgChanged = false;
+            Object.keys(CFG_META).forEach(k => {
+                if (d.auto_cfg[k] !== undefined && d.auto_cfg[k] !== cfgValues[k]) {
+                    cfgValues[k] = d.auto_cfg[k];
+                    cfgChanged = true;
+                }
             });
+            if (cfgChanged) renderTempCfgGrid();
         }
 
         // 風扇狀態同步（頁面重整後恢復正確顯示）
@@ -1562,6 +1557,7 @@ async function pollStatus() {
 }
 
 loadAllSettings();
+renderTempCfgGrid();
 setInterval(pollStatus, 2000);
 pollStatus();
 try { initTempChart(); } catch(e) { console.warn('Chart.js not loaded', e); }
