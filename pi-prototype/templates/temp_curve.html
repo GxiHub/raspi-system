@@ -62,6 +62,7 @@
   td.ok  { color: #2e9e4c; font-weight: 600; }
   td.err { color: #e74c3c; font-weight: 700; }
   #empty-hint { padding: 20px; color: #999; text-align: center; }
+  tr.conn-fail td { color: #c0392b; background: #fdf1f0; font-style: italic; }
 
   @media (max-width: 768px) {
     body { padding: 10px; }
@@ -100,16 +101,23 @@ const stateEl   = document.getElementById('cur-state');
 const scroller  = document.querySelector('.table-wrap');
 
 async function pollOnce() {
-  let d;
-  try {
-    const r = await fetch('/api/status');
-    d = await r.json();
-  } catch (e) {
-    return;
-  }
-
   const now = new Date();
   const t = now.toLocaleTimeString('zh-TW', { hour12: false });
+
+  let d;
+  try {
+    const r = await fetch('/api/status', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) {
+    const row = document.createElement('tr');
+    row.className = 'conn-fail';
+    row.innerHTML = '<td>' + t + '</td><td colspan="5">連線失敗（網路不穩，這筆沒抓到）</td>';
+    body.appendChild(row);
+    emptyHint.style.display = 'none';
+    scroller.scrollTop = scroller.scrollHeight;
+    return;
+  }
 
   const isErr   = d.induction_error != null && d.induction_error !== 0;
   const errText = d.induction_error === 0 ? '正常'
