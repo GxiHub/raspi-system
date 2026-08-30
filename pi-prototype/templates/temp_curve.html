@@ -41,6 +41,32 @@
   }
   .rec-btn.off { background: #e2e2e2; color: #555; }
   .rec-btn.on  { background: #2e9e4c; color: #fff; }
+  .rec-btn:disabled { opacity: 0.6; cursor: default; }
+
+  h2 {
+    font-size: 1.05em;
+    margin: 26px 0 10px;
+    color: #333;
+  }
+  .query-box {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .query-box input[type=date] {
+    flex: 1;
+    min-width: 150px;
+    min-height: 44px;
+    padding: 0 10px;
+    border: 1px solid #d5d5d5;
+    border-radius: 10px;
+    font-size: 0.95em;
+    background: #fff;
+    color: #222;
+  }
+  #query-empty { padding: 20px; color: #999; text-align: center; background: #fff; border-radius: 10px; border: 1px solid #e2e2e2; }
 
   .table-wrap {
     background: #fff;
@@ -108,6 +134,28 @@
     </table>
     <div id="empty-hint">按上面「開始記錄」後，每 15 秒顯示一筆</div>
   </div>
+
+  <h2>按日期查詢歷史紀錄</h2>
+  <div class="query-box">
+    <input type="date" id="query-date">
+    <button id="query-btn" class="rec-btn off">🔍 查詢</button>
+  </div>
+  <div class="table-wrap" id="query-wrap" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th>時間</th>
+          <th>命令功率</th>
+          <th>回饋功率</th>
+          <th>水溫</th>
+          <th>IGBT</th>
+          <th>錯誤碼</th>
+        </tr>
+      </thead>
+      <tbody id="query-body"></tbody>
+    </table>
+  </div>
+  <div id="query-empty" style="display:none;">當天沒有紀錄</div>
 </div>
 
 <script>
@@ -182,6 +230,64 @@ function setRecording(on) {
 }
 
 recToggle.addEventListener('click', () => setRecording(!recording));
+
+// ── 按日期查詢歷史紀錄 ─────────────────────────────────────────────
+const queryDate  = document.getElementById('query-date');
+const queryBtn   = document.getElementById('query-btn');
+const queryBody  = document.getElementById('query-body');
+const queryWrap  = document.getElementById('query-wrap');
+const queryEmpty = document.getElementById('query-empty');
+
+function formatDateOnly(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+queryDate.value = formatDateOnly(new Date());
+
+function renderQueryRow(r) {
+  const t = formatTs(new Date(r.ts * 1000));
+  const isErr   = r.error != null && r.error !== 0;
+  const errText = r.error === 0 ? '正常'
+                : r.error != null ? ('E' + r.error.toString(16).toUpperCase().padStart(2, '0'))
+                : '--';
+  const row = document.createElement('tr');
+  row.innerHTML =
+    '<td>' + t + '</td>' +
+    '<td>' + (r.cmd_pwr ?? '--') + '%</td>' +
+    '<td>' + (r.actual_pwr ?? '--') + '%</td>' +
+    '<td>' + (r.pt100 != null ? r.pt100.toFixed(1) : '--') + '°C</td>' +
+    '<td>' + (r.igbt ?? '--') + '°C</td>' +
+    '<td class="' + (r.error === 0 ? 'ok' : isErr ? 'err' : '') + '">' + errText + '</td>';
+  return row;
+}
+
+queryBtn.addEventListener('click', async () => {
+  const date = queryDate.value;
+  if (!date) return;
+  queryBtn.disabled = true;
+  queryBtn.textContent = '查詢中...';
+  try {
+    const r = await fetch('/api/log_by_day?date=' + encodeURIComponent(date), { cache: 'no-store' });
+    const d = await r.json();
+    queryBody.innerHTML = '';
+    if (!d.readings || d.readings.length === 0) {
+      queryWrap.style.display  = 'none';
+      queryEmpty.style.display = 'block';
+    } else {
+      d.readings.forEach(reading => queryBody.appendChild(renderQueryRow(reading)));
+      queryEmpty.style.display = 'none';
+      queryWrap.style.display  = 'block';
+    }
+  } catch (e) {
+    queryBody.innerHTML = '';
+    queryWrap.style.display  = 'none';
+    queryEmpty.textContent   = '查詢失敗，網路不穩，請重試';
+    queryEmpty.style.display = 'block';
+  } finally {
+    queryBtn.disabled = false;
+    queryBtn.textContent = '🔍 查詢';
+  }
+});
 </script>
 </body>
 </html>

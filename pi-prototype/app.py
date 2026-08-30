@@ -998,6 +998,30 @@ def api_session_detail(sid):
     with open(path, encoding='utf-8') as f:
         return jsonify(json.load(f))
 
+@app.route('/api/log_by_day')
+def api_log_by_day():
+    """按日期查詢當天所有 session 的讀數，攤平成一份時間排序的清單"""
+    date = request.args.get('date', '')
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        return jsonify({'error': 'date 格式須為 YYYY-MM-DD'}), 400
+    prefix = date.replace('-', '')
+    os.makedirs(SESSIONS_DIR, exist_ok=True)
+    files = sorted(glob.glob(os.path.join(SESSIONS_DIR, prefix + '_*.json')))
+    readings = []
+    for fpath in files:
+        try:
+            with open(fpath, encoding='utf-8') as f:
+                s = json.load(f)
+        except Exception:
+            continue
+        sid = s.get('id')
+        for r in s.get('readings', []):
+            entry = dict(r)
+            entry['session'] = sid
+            readings.append(entry)
+    readings.sort(key=lambda r: r.get('ts', 0))
+    return jsonify({'date': date, 'count': len(readings), 'readings': readings})
+
 
 
 @app.route('/api/pi_info')
