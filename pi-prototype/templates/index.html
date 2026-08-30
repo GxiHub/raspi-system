@@ -705,9 +705,9 @@ input[type=range] {
 .mgmt-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.72);
+    background: rgba(0,0,0,0.55);
     display: none;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
     z-index: 1600;
 }
@@ -715,13 +715,14 @@ input[type=range] {
 .mgmt-sheet {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 24px 24px 0 0;
-    padding: 20px 16px 48px;
+    border-radius: 20px;
+    padding: clamp(20px, 2.4vw, 40px) clamp(16px, 2.4vw, 40px) clamp(28px, 3vw, 48px);
     width: 100%;
     max-width: 700px;
-    max-height: 90vh;
+    max-height: 86vh;
     overflow-y: auto;
     overflow-x: hidden;
+    box-shadow: 0 24px 56px -20px rgba(20,24,32,.45);
 }
 .mgmt-sheet-title {
     font-size: clamp(1em, 1.6vw, 1.6em);
@@ -785,7 +786,7 @@ input[type=range] {
 <div class="mgmt-bar">
     <button class="btn-mgmt refresh" onclick="location.reload(true)">↺ 刷新</button>
     <button class="btn-mgmt" onclick="openMgmt('action')">⚙ 動作管理</button>
-    <button class="btn-mgmt" onclick="openMgmt('motor')">⚡ 電機管理</button>
+    <!-- 電機管理現在用不到，先隱藏入口，Sheet 本身還留著 -->
     <button class="btn-mgmt" onclick="openMgmt('system')">🔌 系統管理</button>
     <button class="btn-mgmt" onclick="openMgmt('temp')">🌡️ 溫控管理</button>
 </div>
