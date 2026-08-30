@@ -629,31 +629,43 @@ input[type=range] {
     letter-spacing: 0.03em;
 }
 .ao-modes {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
     margin-bottom: 14px;
 }
 .ao-btn {
-    padding: 22px 16px;
-    border: none;
-    border-radius: 14px;
-    font-size: 1.25em;
-    font-weight: 700;
-    color: white;
+    padding: 16px 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card);
     cursor: pointer;
-    width: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    gap: 8px;
     min-height: 44px;
 }
 .ao-btn:active { opacity: 0.85; transform: scale(0.98); }
-.ao-sec {
-    font-size: 0.65em;
-    opacity: 0.75;
-    font-weight: 400;
+.ao-dial { position: relative; width: 96px; height: 96px; }
+.ao-dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ao-dial-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
+.ao-sec {
+    font-size: 1.4em;
+    font-weight: 700;
+    font-family: monospace;
+    color: var(--text);
+    line-height: 1;
+}
+.ao-sec-unit { font-size: 0.6em; color: var(--muted); margin-top: 2px; }
+.ao-name { font-size: 1em; font-weight: 700; color: var(--text); }
 .ao-cancel {
     width: 100%;
     padding: 16px;
@@ -1163,10 +1175,28 @@ function openActionOverlay(ch) {
     _overlayChannel = ch;
     document.getElementById('ao-title').innerText = `推桿 ${ch} — 選擇動作`;
     const am = getActionModes();
-    document.getElementById('ao-modes').innerHTML = am.map((m, i) => `
-        <button class="ao-btn" style="background:${getModeColor(i)}"
-            onclick="selectAction(${i})">${m.name}<span class="ao-sec">${m.sec}s</span></button>
-    `).join('');
+    const DIAL_C = 314.16; // 2 * PI * r(50)
+    const maxSec = Math.max(...am.map(m => m.sec), 1);
+    document.getElementById('ao-modes').innerHTML = am.map((m, i) => {
+        const ratio  = Math.min(m.sec / maxSec, 1);
+        const offset = (DIAL_C * (1 - ratio)).toFixed(2);
+        const color  = getModeColor(i);
+        return `
+        <button class="ao-btn" onclick="selectAction(${i})">
+            <div class="ao-dial">
+                <svg viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="${color}" stroke-width="10"
+                            stroke-linecap="round" stroke-dasharray="${DIAL_C}" stroke-dashoffset="${offset}"/>
+                </svg>
+                <div class="ao-dial-center">
+                    <span class="ao-sec">${m.sec}</span>
+                    <span class="ao-sec-unit">秒</span>
+                </div>
+            </div>
+            <span class="ao-name">${m.name}</span>
+        </button>`;
+    }).join('');
     document.getElementById('action-overlay').classList.add('show');
 }
 
