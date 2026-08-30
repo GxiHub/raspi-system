@@ -1003,11 +1003,11 @@ input[type=range] {
 // ── 全域模式設定 ────────────────────────────────────────────────────────────
 // modes[0] 固定為升降（isTravel=true），其餘為烹飪模式
 let modes = [
-    { name: '升降',   sec: 5,   isTravel: true },
-    { name: '煮麵',   sec: 60 },
-    { name: '煮菜',   sec: 120 },
-    { name: '煮料',   sec: 180 },
-    { name: '煮鴨血', sec: 90 },
+    { name: '升降',     sec: 5,   isTravel: true },
+    { name: '動作1',    sec: 60 },
+    { name: '動作2',    sec: 120 },
+    { name: '動作3',    sec: 180 },
+    { name: '自訂秒數', sec: 90,  isCustom: true },
 ];
 
 const ACTIVE  = [1, 2, 3, 4, 5, 6];
@@ -1110,6 +1110,7 @@ function saveModesToServer() {
         payload[`mode-${i}-name`] = m.name;
         payload[`mode-${i}-sec`]  = m.sec;
         if (m.isTravel) payload[`mode-${i}-travel`] = true;
+        if (m.isCustom) payload[`mode-${i}-custom`] = true;
     });
     payload['modes-count'] = modes.length;
     post('/api/settings', payload);
@@ -1156,6 +1157,7 @@ async function loadAllSettings() {
                 name,
                 sec:      serverSettings[`mode-${i}-sec`] || 60,
                 isTravel: !!serverSettings[`mode-${i}-travel`] || undefined,
+                isCustom: !!serverSettings[`mode-${i}-custom`] || undefined,
             });
         }
         // 確保升降存在
@@ -1196,11 +1198,13 @@ function openActionOverlay(ch) {
     const DIAL_C = 314.16; // 2 * PI * r(50)
     const maxSec = Math.max(...am.map(m => m.sec), 1);
     document.getElementById('ao-modes').innerHTML = am.map((m, i) => {
-        const ratio  = Math.min(m.sec / maxSec, 1);
-        const offset = (DIAL_C * (1 - ratio)).toFixed(2);
-        const color  = getModeColor(i);
+        const ratio   = Math.min(m.sec / maxSec, 1);
+        const offset  = (DIAL_C * (1 - ratio)).toFixed(2);
+        const color   = getModeColor(i);
+        const rawIdx  = modes.indexOf(m);
+        const handler = m.isCustom ? `selectCustomAction(${i}, ${rawIdx})` : `selectAction(${i})`;
         return `
-        <button class="ao-btn" onclick="selectAction(${i})">
+        <button class="ao-btn" onclick="${handler}">
             <div class="ao-dial">
                 <svg viewBox="0 0 120 120">
                     <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
@@ -1209,7 +1213,7 @@ function openActionOverlay(ch) {
                 </svg>
                 <div class="ao-dial-center">
                     <span class="ao-sec">${m.sec}</span>
-                    <span class="ao-sec-unit">秒</span>
+                    <span class="ao-sec-unit">${m.isCustom ? '上次' : '秒'}</span>
                 </div>
             </div>
             <span class="ao-name">${m.name}</span>
@@ -1228,6 +1232,17 @@ function selectAction(modeIdx) {
     closeActionOverlay();
     if (ch === null) return;
     startProcess(ch, modeIdx);
+}
+
+// 自訂秒數動作：跳鍵盤輸入 → 記住這次的值 → 直接執行
+let _customTarget = null;
+
+function selectCustomAction(modeIdx, rawIdx) {
+    const ch = _overlayChannel;
+    closeActionOverlay();
+    if (ch === null) return;
+    _customTarget = { ch, modeIdx, rawIdx };
+    openKp('custom-run', '自訂秒數');
 }
 
 // 點背景關閉 overlay
@@ -1420,6 +1435,19 @@ function kpDel() {
 function kpOk() {
     const val = parseInt(document.getElementById('kp-display').innerText) || 0;
     document.getElementById('keypad').classList.remove('show');
+
+    // 自訂秒數動作：記住這次的值 → 直接執行
+    if (kpTarget === 'custom-run' && _customTarget) {
+        const { ch, modeIdx, rawIdx } = _customTarget;
+        _customTarget = null;
+        if (val > 0 && modes[rawIdx]) {
+            modes[rawIdx].sec = val;
+            renderTimeConfig();
+            post('/api/settings', { [`mode-${rawIdx}-sec`]: val });
+            startProcess(ch, modeIdx);
+        }
+        return;
+    }
 
     // 全域模式時間設定
     if (kpTarget && kpTarget.startsWith('mode-')) {
