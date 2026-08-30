@@ -108,6 +108,10 @@ E13_RETRY_WINDOW = 600   # 重試次數計算窗口（秒）
 _e13_recover_count       = 0
 _e13_recover_window_start = 0.0
 
+# ── Session 讀數記錄節流（安全偵測仍維持 5 秒一次，記錄放慢到 15 秒一筆）───────
+SESSION_LOG_INTERVAL = 15
+_last_session_log_ts  = 0.0
+
 
 # ── 溫度曲線記錄 ──────────────────────────────────────────────────────────────
 TEMP_LOG_MAX = 1800          # 最多保留 1800 筆（@2s = 1 小時）
@@ -349,7 +353,7 @@ def _e13_auto_recover(resume_pwr: int, attempt: int):
 
 def _induction_monitor_loop():
     global _prev_error, _igbt_warned, _stop_count, _igbt_high_count, induction_pwr
-    global _e13_recover_count, _e13_recover_window_start
+    global _e13_recover_count, _e13_recover_window_start, _last_session_log_ts
     while True:
         try:
             induction_read_status()
@@ -414,19 +418,32 @@ def _induction_monitor_loop():
             else:
                 _stop_count = 0
 
-            # ── 4. 將本次讀數追加到 session ───────────────────────────────
-            _session_append_reading({
-                'ts':       ts,
-                'pt100':    round(current_temp, 1) if (current_temp is not None and -200 < current_temp < 400) else None,
-                'igbt':     induction_igbt_temp,
-                'cmd_pwr':  induction_pwr,
-                'actual_pwr': induction_actual_pwr,
-                'error':    induction_error,
-            })
+            # ── 4. 將本次讀數追加到 session（每 15 秒一筆，跟上面的安全偵測頻率脫鉤）──
+            if ts - _last_session_log_ts >= SESSION_LOG_INTERVAL:
+                _last_session_log_ts = ts
+                _session_append_reading({
+                    'ts':       ts,
+                    'pt100':    round(current_temp, 1) if (current_temp is not None and -200 < current_temp < 400) else None,
+                    'igbt':     induction_igbt_temp,
+                    'cmd_pwr':  induction_pwr,
+                    'actual_pwr': induction_actual_pwr,
+                    'error':    induction_error,
+                })
 
         except Exception as e:
             print(f'[induction_monitor] {e}')
         time.sleep(5)
+
+# ── 啟動時同步軟體命令功率與電磁爐實際狀態 ──────────────────────────────────────
+# 服務重啟（不論原因）不會關閉電磁爐，硬體可能仍在加熱；若沿用預設 induction_pwr=0
+# 會跟硬體脫鉤：畫面顯示待機、也不會建立 session 記錄，但爐子其實還在燒。
+try:
+    induction_read_status()
+    if induction_actual_pwr:
+        induction_pwr = induction_actual_pwr
+        print(f'[startup] 偵測到電磁爐仍在運作（回饋功率 {induction_actual_pwr}%），已同步命令功率')
+except Exception as e:
+    print(f'[startup] 電磁爐狀態同步失敗: {e}')
 
 threading.Thread(target=_induction_monitor_loop, daemon=True).start()
 
