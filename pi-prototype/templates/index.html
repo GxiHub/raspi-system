@@ -185,16 +185,19 @@ input[type=range] {
     gap: 6px;
 }
 .time-box {
-    background: var(--inner);
-    border-radius: 6px;
-    padding: 6px;
+    padding: clamp(16px, 2vw, 32px) clamp(8px, 1.5vw, 20px) clamp(14px, 2vw, 28px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card);
     text-align: center;
     cursor: pointer;
     transition: 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(8px, 1vw, 16px);
 }
-.time-box:hover  { border: 1px solid var(--border); }
-.time-box small  { font-size: 0.8em; color: var(--muted); display: block; }
-.time-box .tval  { font-size: 1.2em; font-weight: 700; color: var(--yellow); }
+.time-box:hover { border-color: var(--muted); }
 
 /* ── 卡片上的動作標籤 ── */
 .act-mode-label {
@@ -263,13 +266,14 @@ input[type=range] {
 .time-config-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: clamp(12px, 1.6vw, 28px);
 }
 .time-config-grid .time-box {
     flex: 1;
-    min-width: 70px;
+    min-width: clamp(140px, 14vw, 220px);
     position: relative;
 }
+.mgmt-sheet--wide { max-width: min(70vw, 1300px); }
 
 /* ── 新增模式 Modal ── */
 #add-mode-modal {
@@ -797,7 +801,7 @@ input[type=range] {
 
 <!-- 動作管理 Sheet -->
 <div class="mgmt-overlay" id="mgmt-action" onclick="bgCloseMgmt(event,'action')">
-    <div class="mgmt-sheet">
+    <div class="mgmt-sheet mgmt-sheet--wide">
         <div class="mgmt-sheet-title">
             <span>⚙ 動作管理</span>
             <button class="btn-mgmt-close" onclick="closeMgmt('action')">關閉</button>
@@ -1021,17 +1025,31 @@ const getModeColor = i => MODE_COLORS[i % MODE_COLORS.length];
 // ── 渲染全域時間設定列 ──────────────────────────────────────────────────────
 function renderTimeConfig() {
     const g = document.getElementById('time-config-grid');
+    const DIAL_C = 314.16; // 2 * PI * r(50)
+    const maxSec = Math.max(...modes.map(m => m.sec), 1);
     let ai = 0;
     g.innerHTML = modes.map((m, i) => {
-        const color = m.isTravel ? null : getModeColor(ai++);
-        const style = color ? `border-top:3px solid ${color};` : '';
+        const color  = m.isTravel ? null : getModeColor(ai++);
+        const ring   = color || 'var(--muted)';
+        const ratio  = Math.min(m.sec / maxSec, 1);
+        const offset = (DIAL_C * (1 - ratio)).toFixed(2);
         return `
-        <div class="time-box" style="${style}"
+        <div class="time-box"
             onclick="openKp('mode-${i}','${m.name}秒數')"
             ontouchstart="lpStart(event,${i})" ontouchend="lpEnd()" ontouchmove="lpEnd()"
             onmousedown="lpStart(event,${i})" onmouseup="lpEnd()" onmouseleave="lpEnd()">
-            <small>${m.name}</small>
-            <span class="tval" id="msec-${i}">${m.sec}</span>s
+            <div class="ao-dial">
+                <svg viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="${ring}" stroke-width="10"
+                            stroke-linecap="round" stroke-dasharray="${DIAL_C}" stroke-dashoffset="${offset}"/>
+                </svg>
+                <div class="ao-dial-center">
+                    <span class="ao-sec" id="msec-${i}">${m.sec}</span>
+                    <span class="ao-sec-unit">秒</span>
+                </div>
+            </div>
+            <span class="ao-name">${m.name}</span>
         </div>`;
     }).join('');
 }
@@ -1408,8 +1426,7 @@ function kpOk() {
         const i = parseInt(kpTarget.split('-')[1]);
         if (!isNaN(i) && modes[i]) {
             modes[i].sec = val;
-            const el = document.getElementById(`msec-${i}`);
-            if (el) el.innerText = val;
+            renderTimeConfig();
             post('/api/settings', { [`mode-${i}-sec`]: val });
         }
         return;
