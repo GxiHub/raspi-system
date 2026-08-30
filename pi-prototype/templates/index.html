@@ -600,9 +600,9 @@ input[type=range] {
 #action-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.72);
+    background: rgba(0,0,0,0.55);
     display: none;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
     z-index: 1800;
 }
@@ -610,12 +610,13 @@ input[type=range] {
 .ao-sheet {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 24px 24px 0 0;
-    padding: clamp(24px, 3vw, 48px) clamp(20px, 3vw, 44px) clamp(40px, 5vw, 72px);
+    border-radius: 20px;
+    padding: clamp(24px, 3vw, 48px) clamp(20px, 3vw, 44px) clamp(28px, 3.5vw, 56px);
     width: 100%;
     max-width: min(70vw, 1300px);
-    max-height: 90vh;
+    max-height: 86vh;
     overflow-y: auto;
+    box-shadow: 0 24px 56px -20px rgba(20,24,32,.45);
 }
 .ao-title {
     font-size: clamp(1em, 1.6vw, 1.6em);
