@@ -815,7 +815,7 @@ input[type=range] {
     <button class="btn-mgmt refresh" onclick="location.reload(true)">↺ 刷新</button>
     <button class="btn-mgmt" onclick="openMgmt('action')">⚙ 動作管理</button>
     <button class="btn-mgmt" onclick="openMgmt('system')">🔌 系統管理</button>
-    <a href="/temp_curve" target="_blank" class="btn-mgmt"
+    <a href="/temp_curve" class="btn-mgmt"
        style="display:flex;align-items:center;justify-content:center;text-decoration:none;">📈 加熱紀錄</a>
     <button class="btn-mgmt" onclick="openMgmt('temp')">🌡️ 溫控管理</button>
 </div>
@@ -846,7 +846,7 @@ input[type=range] {
             <span class="uptime-txt" id="uptime-txt"></span>
             <button class="btn-diag" id="diag-btn" onclick="runDiagnosis()">一鍵診斷</button>
             <button class="btn-diag" onclick="softRefresh()">↺ 重新整理</button>
-            <a href="/temp_curve" target="_blank" class="btn-diag" style="text-decoration:none;">📈 曲線</a>
+            <a href="/temp_curve" class="btn-diag" style="text-decoration:none;">📈 曲線</a>
         </div>
         <div class="device-grid" id="device-grid">
             <div class="device-item"><div class="dot" id="dot-serial"></div><div class="device-info"><div class="device-name">序列埠</div><div class="device-addr">/dev/ttyRS485</div></div></div>
