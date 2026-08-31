@@ -266,11 +266,13 @@ function setRecording(on) {
   if (on) {
     recToggle.textContent = '⏸ 停止記錄';
     recToggle.className = 'rec-btn on';
+    fetch('/api/session/start', { method: 'POST' }).catch(() => {});
     pollOnce();
     timerId = setInterval(pollOnce, 15000);
   } else {
     recToggle.textContent = '▶ 開始記錄';
     recToggle.className = 'rec-btn off';
+    fetch('/api/session/stop', { method: 'POST' }).catch(() => {});
     if (timerId) clearInterval(timerId);
     timerId = null;
   }
