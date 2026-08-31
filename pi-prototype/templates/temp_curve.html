@@ -14,6 +14,15 @@
     padding: 16px;
   }
   .wrap { max-width: 720px; margin: 0 auto; }
+  .header-row {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #d8d8d8;
+  }
   .back-link {
     display: inline-flex;
     align-items: center;
@@ -26,12 +35,11 @@
   .back-link:active { color: #222; }
   h1 {
     font-size: 1.3em;
-    margin: 0 0 4px;
+    margin: 0;
   }
   #status-line {
     font-size: 1em;
     color: #666;
-    margin-bottom: 14px;
   }
   #status-line b { color: #222; }
   .state-heating { color: #e67e22; font-weight: bold; }
@@ -145,9 +153,11 @@
 </head>
 <body>
 <div class="wrap">
-  <a class="back-link" href="/">← 返回</a>
-  <h1>加熱即時記錄</h1>
-  <div id="status-line">狀態：<b id="cur-state">--</b>　每 15 秒記一筆</div>
+  <div class="header-row">
+    <a class="back-link" href="/">← 返回</a>
+    <h1>加熱即時記錄</h1>
+    <div id="status-line">狀態：<b id="cur-state">--</b>　每 15 秒記一筆</div>
+  </div>
 
   <div class="control-row">
     <div class="query-group">
