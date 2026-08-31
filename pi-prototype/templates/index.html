@@ -304,6 +304,16 @@ input[type=range] {
     z-index: 2000;
 }
 #add-mode-modal.show { display: flex; }
+#mode-action-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+#mode-action-modal.show { display: flex; }
 .add-mode-input {
     width: 100%;
     background: var(--inner);
@@ -962,11 +972,23 @@ input[type=range] {
 <!-- 新增模式 Modal -->
 <div id="add-mode-modal">
     <div class="modal-box">
-        <div class="modal-title">新增動作</div>
+        <div class="modal-title" id="add-mode-title">新增動作</div>
         <input type="text" id="new-mode-name" class="add-mode-input" placeholder="輸入動作名稱" maxlength="8">
         <div class="modal-btns">
             <button class="btn-cancel-modal" onclick="addModeCancel()">取消</button>
             <button class="btn-ok-modal" onclick="addModeConfirm()">確認</button>
+        </div>
+    </div>
+</div>
+
+<!-- 動作項目 長按選單 Modal -->
+<div id="mode-action-modal">
+    <div class="modal-box">
+        <div class="modal-title" id="mode-action-title">動作</div>
+        <div class="modal-btns" style="flex-direction:column;">
+            <button class="btn-ok-modal" onclick="modeActionRename()">✏️ 改名</button>
+            <button class="btn-cancel-modal" style="background:#fde8e8;color:#e74c3c;" onclick="modeActionDelete()">🗑 刪除</button>
+            <button class="btn-cancel-modal" onclick="closeModeAction()">取消</button>
         </div>
     </div>
 </div>
@@ -1078,7 +1100,7 @@ function renderTimeConfig() {
     }).join('');
 }
 
-// ── 長按刪除 ────────────────────────────────────────────────────────────────
+// ── 長按：改名／刪除 ──────────────────────────────────────────────────────
 let _lpTimer = null;
 let _lpTarget = null;
 
@@ -1087,13 +1109,32 @@ function lpStart(e, i) {
     _lpTarget = i;
     _lpTimer = setTimeout(() => {
         _lpTimer = null;
-        e.target.closest('.time-box').style.outline = '2px solid var(--accent)';
-        if (confirm('刪除「' + modes[i].name + '」？')) {
-            deleteMode(i);
-        } else {
-            e.target.closest('.time-box').style.outline = '';
-        }
+        openModeActionModal(i);
     }, 700);
+}
+
+let _modeActionTarget = null;
+
+function openModeActionModal(i) {
+    _modeActionTarget = i;
+    document.getElementById('mode-action-title').textContent = '「' + modes[i].name + '」';
+    document.getElementById('mode-action-modal').classList.add('show');
+}
+function closeModeAction() {
+    document.getElementById('mode-action-modal').classList.remove('show');
+    _modeActionTarget = null;
+}
+function modeActionRename() {
+    const i = _modeActionTarget;
+    closeModeAction();
+    if (i !== null) openAddModeModal(i);
+}
+function modeActionDelete() {
+    const i = _modeActionTarget;
+    closeModeAction();
+    if (i !== null && confirm('刪除「' + modes[i].name + '」？')) {
+        deleteMode(i);
+    }
 }
 
 function lpEnd() {
@@ -1140,20 +1181,33 @@ function saveModesToServer() {
     post('/api/settings', payload);
 }
 
-function openAddModeModal() {
-    document.getElementById('new-mode-name').value = '';
+let _editModeIndex = null;
+
+function openAddModeModal(editIndex = null) {
+    _editModeIndex = editIndex;
+    const input = document.getElementById('new-mode-name');
+    document.getElementById('add-mode-title').textContent = editIndex === null ? '新增動作' : '改名動作';
+    input.value = editIndex === null ? '' : modes[editIndex].name;
     document.getElementById('add-mode-modal').classList.add('show');
-    setTimeout(() => document.getElementById('new-mode-name').focus(), 100);
+    setTimeout(() => { input.focus(); input.select(); }, 100);
 }
 function addModeCancel() {
+    _editModeIndex = null;
     document.getElementById('add-mode-modal').classList.remove('show');
 }
 function addModeConfirm() {
     const name = document.getElementById('new-mode-name').value.trim();
     if (!name) return;
-    const i = modes.length;
-    modes.push({ name, sec: 60 });
-    post('/api/settings', { [`mode-${i}-name`]: name, [`mode-${i}-sec`]: 60 });
+    if (_editModeIndex !== null) {
+        const i = _editModeIndex;
+        modes[i].name = name;
+        post('/api/settings', { [`mode-${i}-name`]: name });
+    } else {
+        const i = modes.length;
+        modes.push({ name, sec: 60 });
+        post('/api/settings', { [`mode-${i}-name`]: name, [`mode-${i}-sec`]: 60 });
+    }
+    _editModeIndex = null;
     renderTimeConfig();
     document.getElementById('add-mode-modal').classList.remove('show');
 }
