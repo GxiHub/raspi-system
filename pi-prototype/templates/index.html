@@ -426,15 +426,22 @@ input[type=range] {
 /* ── 數字鍵盤 ── */
 #keypad {
     position: fixed;
-    bottom: -100%;
-    left: 0; right: 0;
-    background: var(--inner);
-    border-top: 2px solid var(--border);
-    padding: 20px;
-    transition: 0.35s ease;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
     z-index: 2500;
 }
-#keypad.show { bottom: 0; }
+#keypad.show { display: flex; }
+.kp-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    width: 90%;
+    max-width: 340px;
+}
 .kp-display {
     font-size: 2.5em;
     text-align: center;
@@ -978,21 +985,23 @@ input[type=range] {
 
 <!-- ⑥ 數字鍵盤 -->
 <div id="keypad">
-    <div class="kp-label" id="kp-label">輸入數值</div>
-    <div class="kp-display" id="kp-display">0</div>
-    <div class="kp-grid">
-        <div class="kp-key" onclick="kpIn(1)">1</div>
-        <div class="kp-key" onclick="kpIn(2)">2</div>
-        <div class="kp-key" onclick="kpIn(3)">3</div>
-        <div class="kp-key" onclick="kpIn(4)">4</div>
-        <div class="kp-key" onclick="kpIn(5)">5</div>
-        <div class="kp-key" onclick="kpIn(6)">6</div>
-        <div class="kp-key" onclick="kpIn(7)">7</div>
-        <div class="kp-key" onclick="kpIn(8)">8</div>
-        <div class="kp-key" onclick="kpIn(9)">9</div>
-        <div class="kp-key kp-del" onclick="kpDel()">⌫</div>
-        <div class="kp-key" onclick="kpIn(0)">0</div>
-        <div class="kp-key kp-ok"  onclick="kpOk()">OK</div>
+    <div class="kp-box">
+        <div class="kp-label" id="kp-label">輸入數值</div>
+        <div class="kp-display" id="kp-display">0</div>
+        <div class="kp-grid">
+            <div class="kp-key" onclick="kpIn(1)">1</div>
+            <div class="kp-key" onclick="kpIn(2)">2</div>
+            <div class="kp-key" onclick="kpIn(3)">3</div>
+            <div class="kp-key" onclick="kpIn(4)">4</div>
+            <div class="kp-key" onclick="kpIn(5)">5</div>
+            <div class="kp-key" onclick="kpIn(6)">6</div>
+            <div class="kp-key" onclick="kpIn(7)">7</div>
+            <div class="kp-key" onclick="kpIn(8)">8</div>
+            <div class="kp-key" onclick="kpIn(9)">9</div>
+            <div class="kp-key kp-del" onclick="kpDel()">⌫</div>
+            <div class="kp-key" onclick="kpIn(0)">0</div>
+            <div class="kp-key kp-ok"  onclick="kpOk()">OK</div>
+        </div>
     </div>
 </div>
 
@@ -1510,7 +1519,7 @@ function kpOk() {
 
 // 點鍵盤外關閉
 document.addEventListener('click', e => {
-    if (!document.getElementById('keypad').contains(e.target) &&
+    if (!e.target.closest('.kp-box') &&
         !e.target.closest('.time-box')) {
         document.getElementById('keypad').classList.remove('show');
     }
