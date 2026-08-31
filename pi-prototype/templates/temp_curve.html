@@ -14,6 +14,16 @@
     padding: 16px;
   }
   .wrap { max-width: 720px; margin: 0 auto; }
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 4px;
+    color: #555;
+    font-size: 0.95em;
+    text-decoration: none;
+  }
+  .back-link:active { color: #222; }
   h1 {
     font-size: 1.3em;
     margin: 0 0 4px;
@@ -135,6 +145,7 @@
 </head>
 <body>
 <div class="wrap">
+  <a class="back-link" href="/">← 返回</a>
   <h1>加熱即時記錄</h1>
   <div id="status-line">狀態：<b id="cur-state">--</b>　每 15 秒記一筆</div>
 
