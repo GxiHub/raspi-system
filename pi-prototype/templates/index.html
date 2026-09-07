@@ -940,12 +940,13 @@ input[type=range] {
             <p class="temp-section-label">手動功率</p>
             <div class="pwr-btns" id="pwr-btns">
                 <button onclick="setInduction(43)">43%</button>
-                <button onclick="setInduction(48)">48%</button>
                 <button onclick="setInduction(52)">52%</button>
                 <button onclick="setInduction(55)">55%</button>
+                <button onclick="setInduction(60)">60%</button>
+                <button onclick="setInduction(63)">63%</button>
                 <button onclick="setInduction(0)">關閉</button>
             </div>
-            <input type="range" id="pwr-slider" min="0" max="55" value="0"
+            <input type="range" id="pwr-slider" min="0" max="63" value="0"
                    onchange="setInduction(this.value)">
         </div>
     </div>
