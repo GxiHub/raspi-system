@@ -1424,6 +1424,9 @@ function setCardState(ch, isRunning, modeName, modeColor) {
 }
 
 // ── 電磁爐 ──────────────────────────────────────────────────────────────────
+// 使用者正在拖曳功率滑桿時，暫停輪詢回寫，避免值被拉回去
+let pwrSliderBusy = false;
+
 async function setInduction(pwr) {
     pwr = parseInt(pwr);
     document.getElementById('pwr-val').innerText = pwr + '%';
@@ -1608,10 +1611,14 @@ async function pollStatus() {
         tv.innerText = d.temp != null ? d.temp.toFixed(1) : '--';
         tv.style.color = (d.temp != null && d.temp >= 100) ? '#e74c3c' : 'var(--yellow)';
 
-        // 電磁爐（自動模式時同步顯示）
-        if (d.auto_temp_on) {
-            document.getElementById('pwr-val').innerText   = d.induction_pwr + '%';
-            document.getElementById('pwr-slider').value    = d.induction_pwr;
+        // 電磁爐功率：不論手動/自動都從後端同步，
+        // 否則只有「按下按鈕的那台裝置」會更新，其他裝置（pi53 觸控螢幕）會停在舊值
+        const pvEl = document.getElementById('pwr-val');
+        if (pvEl) pvEl.innerText = d.induction_pwr + '%';
+        const psEl = document.getElementById('pwr-slider');
+        // 使用者正在拖曳滑桿時不要蓋掉他的操作
+        if (psEl && !pwrSliderBusy && document.activeElement !== psEl) {
+            psEl.value = d.induction_pwr;
         }
         // 電磁爐回讀監測
         const igbtEl = document.getElementById('igbt-val');
@@ -1676,6 +1683,14 @@ async function pollStatus() {
 
 loadAllSettings();
 renderTempCfgGrid();
+(function bindPwrSlider() {
+    const el = document.getElementById('pwr-slider');
+    if (!el) return;
+    ['pointerdown', 'touchstart'].forEach(ev =>
+        el.addEventListener(ev, () => { pwrSliderBusy = true; }));
+    ['pointerup', 'touchend', 'touchcancel', 'blur'].forEach(ev =>
+        el.addEventListener(ev, () => { pwrSliderBusy = false; }));
+})();
 setInterval(pollStatus, 2000);
 pollStatus();
 try { initTempChart(); } catch(e) { console.warn('Chart.js not loaded', e); }
