@@ -356,6 +356,8 @@ input[type=range] {
     min-height: 44px;
 }
 .btn-diag:hover { background: #3d6fa8; }
+.btn-diag.on,
+.btn-diag.on:hover { background: var(--green); color: #fff; }
 .btn-diag.running { opacity: 0.6; pointer-events: none; }
 .device-grid {
     display: grid;
@@ -864,6 +866,7 @@ input[type=range] {
             <button class="btn-diag" id="diag-btn" onclick="runDiagnosis()">一鍵診斷</button>
             <button class="btn-diag" onclick="softRefresh()">↺ 重新整理</button>
             <a href="/temp_curve" class="btn-diag" style="text-decoration:none;">📈 曲線</a>
+            <button class="btn-diag" id="fan-3" onclick="toggleFan(3)">風扇 3　OFF</button>
         </div>
         <div class="device-grid" id="device-grid">
             <div class="device-item"><div class="dot" id="dot-serial"></div><div class="device-info"><div class="device-name">序列埠</div><div class="device-addr">/dev/ttyRS485</div></div></div>
