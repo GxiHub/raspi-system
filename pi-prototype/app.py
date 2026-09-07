@@ -18,7 +18,7 @@
   Module 0x0C：
     coil 0/1  → 推桿5 伸出/縮回
     coil 2/3  → 推桿6 伸出/縮回
-    coil 4    → 風扇3
+    coil 4    → 風扇3（加熱連動：電磁爐有功率自動開，停止加熱自動關）
     coil 6/7  → 推桿4 伸出/縮回
     coil 6    → 風扇1
     coil 7    → 風扇2
@@ -71,6 +71,9 @@ FAN_MAP = {
     2: (7, 0x0C),
     3: (4, 0x0C),
 }
+
+# 加熱連動風扇：電磁爐功率 > 0 就開、歸零就關（None = 不連動）
+HEAT_LINKED_FAN = 3
 
 # ── 共用狀態 ──────────────────────────────────────────────────────────────────
 serial_lock   = threading.Lock()
@@ -183,6 +186,18 @@ def coil_write(relay_addr: int, coil: int, on: bool):
         return _send(data)
 
 
+def fan_set(fan: int, on: bool, force: bool = False):
+    """設定風扇並同步狀態；狀態沒變就不重複寫匯流排（force=True 強制寫）"""
+    mapping = FAN_MAP.get(fan)
+    if not mapping:
+        return
+    if not force and fan_states.get(fan) == on:
+        return
+    coil, addr = mapping
+    coil_write(addr, coil, on)
+    fan_states[fan] = on
+
+
 def induction_set(pwr: int):
     """設定電磁爐功率 0~100%"""
     global induction_pwr
@@ -197,6 +212,9 @@ def induction_set(pwr: int):
     with serial_lock:
         _send(data)
     induction_pwr = pwr
+    # 加熱連動風扇：有功率就開，歸零就關
+    if HEAT_LINKED_FAN:
+        fan_set(HEAT_LINKED_FAN, pwr > 0)
 
 
 # ── 步進電機控制（原品牌，Slave 0x02）────────────────────────────────────────
@@ -795,12 +813,9 @@ def api_down():
 def api_fan():
     fan = int(request.json.get('fan'))
     on  = bool(request.json.get('on'))
-    mapping = FAN_MAP.get(fan)
-    if not mapping:
+    if fan not in FAN_MAP:
         return jsonify({'status': 'error', 'msg': 'invalid fan'}), 400
-    coil, addr = mapping
-    coil_write(addr, coil, on)
-    fan_states[fan] = on
+    fan_set(fan, on, force=True)
     return jsonify({'status': 'ok', 'fan': fan, 'on': on})
 
 
